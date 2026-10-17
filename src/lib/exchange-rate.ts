@@ -104,6 +104,30 @@ function parseCurrencyCard(card: ReturnType<typeof load> extends never ? never :
   };
 }
 
+function convertUsdRatesToPyg(rawRates: Record<string, number>): ExchangeRateRecord {
+  const normalized: ExchangeRateRecord = {};
+  const pygPerUsd = Number(rawRates.PYG);
+
+  if (!Number.isFinite(pygPerUsd) || pygPerUsd <= 0) {
+    return normalized;
+  }
+
+  for (const [code, value] of Object.entries(rawRates)) {
+    if (!PUBLIC_BASE_CODES.has(code)) continue;
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) continue;
+
+    const convertedValue = code === "PYG" ? 1 : pygPerUsd / numericValue;
+    normalized[code] = {
+      buy: convertedValue,
+      sell: convertedValue,
+    };
+  }
+
+  return normalized;
+}
+
 async function fetchPublicExchangeRates(): Promise<ExchangeRateRecord> {
   const response = await fetch(PUBLIC_EXCHANGE_API_URL, {
     headers: { Accept: "application/json" },
@@ -116,19 +140,7 @@ async function fetchPublicExchangeRates(): Promise<ExchangeRateRecord> {
 
   const payload = (await response.json()) as { rates?: Record<string, number> };
   const rawRates = payload.rates ?? {};
-  const normalized: ExchangeRateRecord = {};
-
-  for (const [code, value] of Object.entries(rawRates)) {
-    if (!PUBLIC_BASE_CODES.has(code)) continue;
-
-    const numericValue = Number(value);
-    if (!Number.isFinite(numericValue) || numericValue <= 0) continue;
-
-    normalized[code] = {
-      buy: numericValue,
-      sell: numericValue,
-    };
-  }
+  const normalized = convertUsdRatesToPyg(rawRates);
 
   if (Object.keys(normalized).length === 0) {
     throw new Error("La API pública no devolvió cotizaciones válidas.");
