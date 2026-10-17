@@ -66,7 +66,12 @@ function SafeHtml({ html }: { html: string }) {
     setClean(DOMPurify.sanitize(normalized));
   }, [html]);
 
-  return <div className="prose-news mx-auto w-full max-w-4xl" dangerouslySetInnerHTML={{ __html: clean }} />;
+  return (
+    <div
+      className="prose prose-lg max-w-none prose-p:mb-6 prose-headings:mt-8 prose-headings:mb-4 prose-strong:font-extrabold prose-em:italic prose-img:rounded-3xl prose-figure:my-6 prose-news mx-auto w-full max-w-4xl"
+      dangerouslySetInnerHTML={{ __html: clean }}
+    />
+  );
 }
 
 function ArticleSkeleton() {
