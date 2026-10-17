@@ -286,6 +286,7 @@ function AdminPage() {
   const [activeCoverIndex, setActiveCoverIndex] = useState(0);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const contentSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
   const filteredArticles = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
@@ -395,15 +396,24 @@ function AdminPage() {
     const closingTag = format === "bold" ? "</strong>" : "</em>";
     const nextValue = `${textarea.value.slice(0, start)}${tag}${selected}${closingTag}${textarea.value.slice(end)}`;
 
-    setForm((prev) => ({ ...prev, content: nextValue }));
+    const nextSelection = {
+      start: start + tag.length,
+      end: start + tag.length + selected.length,
+    };
 
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const newStart = start + tag.length;
-      const newEnd = newStart + selected.length;
-      textarea.setSelectionRange(newStart, newEnd);
-    });
+    contentSelectionRef.current = nextSelection;
+    setForm((prev) => ({ ...prev, content: nextValue }));
   };
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || !contentSelectionRef.current) return;
+
+    const selection = contentSelectionRef.current;
+    textarea.focus();
+    textarea.setSelectionRange(selection.start, selection.end);
+    contentSelectionRef.current = null;
+  }, [form.content]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -1498,7 +1508,16 @@ function AdminPage() {
                 <textarea
                   ref={textareaRef}
                   value={form.content}
-                  onChange={(event) => setForm((prev) => ({ ...prev, content: event.target.value }))}
+                  dir="ltr"
+                  style={{ direction: "ltr", textAlign: "left" }}
+                  onChange={(event) => {
+                    const textarea = event.target;
+                    contentSelectionRef.current = {
+                      start: textarea.selectionStart,
+                      end: textarea.selectionEnd,
+                    };
+                    setForm((prev) => ({ ...prev, content: textarea.value }));
+                  }}
                   rows={12}
                   className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm leading-7 text-foreground outline-none transition focus:border-primary"
                   placeholder="Escribí la nota completa…"
