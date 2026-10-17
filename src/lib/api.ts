@@ -1,0 +1,337 @@
+import type { PostgrestError } from "@supabase/supabase-js";
+import { requireSupabaseClient } from "@/lib/supabase";
+import type { Article, Category, Paginated, Tag } from "@/types";
+
+const makeArticleSelect = (includeContent = true) => {
+  const fields = [
+    "id",
+    "title",
+    "slug",
+    "subtitle",
+    "excerpt",
+    includeContent ? "content" : "",
+    "cover_image_url",
+    "is_featured",
+    "is_breaking",
+    "reading_time_minutes",
+    "seo_title",
+    "seo_description",
+    "views_count",
+    "published_at",
+    "category:categories(id,name,slug,color,sort_order)",
+    "author:profiles(full_name,avatar_url)",
+    "tags:article_tags(tag:tags(id,name,slug))",
+  ].filter(Boolean).join(",");
+
+  return fields;
+};
+
+const normalizePublishedAt = (value: string | null | undefined) => value ?? new Date().toISOString();
+
+const escapeLikeValue = (value: string) =>
+  value
+    .replace(/\\/g, "\\\\")
+    .replace(/[%_]/g, "\\$&")
+    .replace(/,/g, " ");
+
+const mapRow = (row: any): Article => {
+  const tags: Tag[] = Array.isArray(row?.tags)
+    ? row.tags
+        .map((entry: any) => {
+          const tag = entry?.tag ?? entry;
+          if (!tag?.id || !tag?.name) return null;
+          return { id: tag.id, name: tag.name, slug: tag.slug ?? tag.name.toLowerCase().replace(/\s+/g, "-") };
+        })
+        .filter(Boolean)
+    : [];
+
+  const category = row?.category
+    ? {
+        id: row.category.id,
+        name: row.category.name,
+        slug: row.category.slug,
+        color: row.category.color ?? null,
+        sort_order: row.category.sort_order ?? 0,
+      }
+    : null;
+
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    subtitle: row.subtitle ?? null,
+    excerpt: row.excerpt ?? null,
+    content: row.content ?? "",
+    cover_image_url: row.cover_image_url ?? null,
+    category,
+    author: row.author
+      ? {
+          full_name: row.author.full_name ?? "",
+          avatar_url: row.author.avatar_url ?? null,
+        }
+      : null,
+    tags,
+    is_featured: Boolean(row.is_featured),
+    is_breaking: Boolean(row.is_breaking),
+    reading_time_minutes: row.reading_time_minutes ?? null,
+    seo_title: row.seo_title ?? null,
+    seo_description: row.seo_description ?? null,
+    views_count: Number(row.views_count ?? 0),
+    published_at: normalizePublishedAt(row.published_at),
+  };
+};
+
+const handleSupabaseError = (error: PostgrestError | null) => {
+  if (error) {
+    console.error(error);
+    throw error;
+  }
+};
+
+export const getFeaturedArticle = async (): Promise<Article | null> => {
+  const client = requireSupabaseClient();
+  const baseQuery = client
+    .from("articles")
+    .select(makeArticleSelect())
+    .eq("status", "published")
+    .lte("published_at", new Date().toISOString());
+
+  const { data: featured, error: featuredError } = await baseQuery
+    .eq("is_featured", true)
+    .order("published_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (featuredError) {
+    if (featuredError.code === "PGRST116") {
+      const { data: fallback, error: fallbackError } = await client
+        .from("articles")
+        .select(makeArticleSelect())
+        .eq("status", "published")
+        .lte("published_at", new Date().toISOString())
+        .order("published_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      handleSupabaseError(fallbackError);
+      return fallback ? mapRow(fallback) : null;
+    }
+    handleSupabaseError(featuredError);
+  }
+
+  return featured ? mapRow(featured) : null;
+};
+
+export const getBreakingArticles = async (): Promise<Article[]> => {
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from("articles")
+    .select(makeArticleSelect())
+    .eq("status", "published")
+    .lte("published_at", new Date().toISOString())
+    .eq("is_breaking", true)
+    .order("published_at", { ascending: false });
+
+  handleSupabaseError(error);
+  return (data ?? []).map(mapRow);
+};
+
+export const getMostReadArticles = async (limit = 5): Promise<Article[]> => {
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from("articles")
+    .select(makeArticleSelect())
+    .eq("status", "published")
+    .lte("published_at", new Date().toISOString())
+    .order("views_count", { ascending: false })
+    .limit(limit);
+
+  handleSupabaseError(error);
+  return (data ?? []).map(mapRow);
+};
+
+export const getLatestArticles = async (limit = 6): Promise<Article[]> => {
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from("articles")
+    .select(makeArticleSelect())
+    .eq("status", "published")
+    .lte("published_at", new Date().toISOString())
+    .order("published_at", { ascending: false })
+    .limit(limit);
+
+  handleSupabaseError(error);
+  return (data ?? []).map(mapRow);
+};
+
+export const getArticlesByCategory = async (slug: string, page = 1, pageSize = 4): Promise<Paginated<Article>> => {
+  const client = requireSupabaseClient();
+  const pageIndex = Math.max(page, 1) - 1;
+  const from = pageIndex * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data, error, count } = await client
+    .from("articles")
+    .select("id, title, slug, subtitle, excerpt, cover_image_url, is_featured, is_breaking, reading_time_minutes, seo_title, seo_description, views_count, published_at, category:categories!inner(id,name,slug,color,sort_order), author:profiles(full_name,avatar_url), tags:article_tags(tag:tags(id,name,slug))", { count: "exact" })
+    .eq("status", "published")
+    .lte("published_at", new Date().toISOString())
+    .eq("category.slug", slug)
+    .order("published_at", { ascending: false })
+    .range(from, to);
+
+  handleSupabaseError(error);
+  return {
+    items: (data ?? []).map(mapRow),
+    total: count ?? 0,
+    page,
+    pageSize,
+  };
+};
+
+export const getArticlesByTag = async (slug: string, page = 1, pageSize = 12): Promise<Paginated<Article>> => {
+  const client = requireSupabaseClient();
+  const pageIndex = Math.max(page, 1) - 1;
+  const from = pageIndex * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data, error, count } = await client
+    .from("articles")
+    .select("id, title, slug, subtitle, excerpt, cover_image_url, is_featured, is_breaking, reading_time_minutes, seo_title, seo_description, views_count, published_at, category:categories(id,name,slug,color,sort_order), author:profiles(full_name,avatar_url), tags:article_tags!inner(tag:tags!inner(id,name,slug))", { count: "exact" })
+    .eq("status", "published")
+    .lte("published_at", new Date().toISOString())
+    .eq("tags.tag.slug", slug)
+    .order("published_at", { ascending: false })
+    .range(from, to);
+
+  handleSupabaseError(error);
+  return {
+    items: (data ?? []).map(mapRow),
+    total: count ?? 0,
+    page,
+    pageSize,
+  };
+};
+
+export const getArticleBySlug = async (slug: string): Promise<Article | null> => {
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from("articles")
+    .select(makeArticleSelect())
+    .eq("slug", slug)
+    .eq("status", "published")
+    .lte("published_at", new Date().toISOString())
+    .maybeSingle();
+
+  if (error && error.code !== "PGRST116") {
+    handleSupabaseError(error);
+  }
+
+  return data ? mapRow(data) : null;
+};
+
+export const getRelatedArticles = async (articleId: string, categoryId: string | null): Promise<Article[]> => {
+  if (!categoryId) return [];
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from("articles")
+    .select(makeArticleSelect())
+    .eq("status", "published")
+    .lte("published_at", new Date().toISOString())
+    .eq("category_id", categoryId)
+    .neq("id", articleId)
+    .order("published_at", { ascending: false })
+    .limit(4);
+
+  handleSupabaseError(error);
+  return (data ?? []).map(mapRow);
+};
+
+export const getCategories = async (): Promise<Category[]> => {
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from("categories")
+    .select("id,name,slug,color,sort_order")
+    .order("sort_order", { ascending: true });
+
+  handleSupabaseError(error);
+  return (data ?? []) as Category[];
+};
+
+export const searchArticles = async (term: string, page = 1, pageSize = 12): Promise<Paginated<Article>> => {
+  const query = term.trim();
+  const client = requireSupabaseClient();
+  const pageIndex = Math.max(page, 1) - 1;
+  const from = pageIndex * pageSize;
+  const to = from + pageSize - 1;
+
+  if (!query) {
+    return { items: [], total: 0, page, pageSize };
+  }
+
+  const escaped = escapeLikeValue(query);
+  const { data, error, count } = await client
+    .from("articles")
+    .select("id, title, slug, subtitle, excerpt, cover_image_url, is_featured, is_breaking, reading_time_minutes, seo_title, seo_description, views_count, published_at, category:categories(id,name,slug,color,sort_order), author:profiles(full_name,avatar_url), tags:article_tags(tag:tags(id,name,slug))", { count: "exact" })
+    .eq("status", "published")
+    .lte("published_at", new Date().toISOString())
+    .or(`title.ilike.%${escaped}%,subtitle.ilike.%${escaped}%,excerpt.ilike.%${escaped}%`)
+    .order("published_at", { ascending: false })
+    .range(from, to);
+
+  handleSupabaseError(error);
+  return {
+    items: (data ?? []).map(mapRow),
+    total: count ?? 0,
+    page,
+    pageSize,
+  };
+};
+
+export const subscribeNewsletter = async (email: string): Promise<{ ok: true; email: string }> => {
+  const client = requireSupabaseClient();
+
+  const { error } = await client.from("newsletter_subscribers").insert({ email });
+
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("Este correo ya está suscripto");
+    }
+    console.error(error);
+    throw error;
+  }
+
+  return { ok: true, email };
+};
+
+export const registerArticleView = async (articleId: string): Promise<void> => {
+  const client = requireSupabaseClient();
+
+  if (typeof window === "undefined") return;
+
+  const sessionKey = "qap_article_view_session";
+  const browserSessionId = window.sessionStorage.getItem(sessionKey) ?? crypto.randomUUID();
+  window.sessionStorage.setItem(sessionKey, browserSessionId);
+
+  let userId: string | null = null;
+  try {
+    const { data: sessionData } = await client.auth.getSession();
+    userId = sessionData.session?.user?.id ?? null;
+  } catch (error) {
+    console.warn("No se pudo resolver la sesión del usuario para registrar la vista.", error);
+  }
+
+  const identitySessionId = userId ? `user:${userId}:${browserSessionId}` : `anon:${browserSessionId}`;
+
+  const { error } = await client.from("article_views").insert({
+    article_id: articleId,
+    user_id: userId,
+    session_id: identitySessionId,
+    referrer: document.referrer || null,
+    user_agent: navigator.userAgent || null,
+    device_type: /Mobile|Android|iPhone|iPad/.test(navigator.userAgent) ? "mobile" : "desktop",
+  });
+
+  if (error) {
+    if (error.code === "23505") return;
+    console.error("No se pudo registrar la vista del artículo:", error);
+  }
+};

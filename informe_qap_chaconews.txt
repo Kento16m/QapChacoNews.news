@@ -1,0 +1,287 @@
+INFORME GENERAL DE LA PAGINA WEB QAP CHACONEWS
+=================================================
+
+Fecha de análisis: 15/10/2026
+Proyecto: QAP ChacoNews
+Tipo: portal de noticias / medios digitales / frontend con Supabase y React + Vite
+
+1. RESUMEN EJECUTIVO
+-------------------
+QAP ChacoNews es una web de noticias enfocada en actualidad del Chaco Paraguayo, con una estructura tipo portal moderno, estilo editorial y UX orientada a navegación rápida y consumo de contenido. La plataforma combina:
+- Frontend en React + Vite + TanStack Router
+- Estilos y diseño visual con Tailwind / diseño sofisticado premium
+- Datos de contenido y autenticación manejados con Supabase
+- Sistema de comentarios con likes, respuestas y moderación
+- Registro de vistas por artículo para estadísticas reales
+- Funciones de perfil de usuario, cierre de sesión con confirmación y manejo de sesiones
+- Integración de logo, footer y piezas visuales estables para la identidad del sitio
+
+La web no solo presenta noticias, sino que también incorpora comportamiento de comunidad: lectura, interacción, perfil personal, comentarios y sistema de participación.
+
+2. ARQUITECTURA GENERAL
+-----------------------
+La aplicación está organizada en módulos de contenido, autenticación y UI reutilizable:
+
+- src/routes/
+  Contiene las páginas principales del sitio: home, categoria, etiqueta, noticia, perfil, admin, etc.
+
+- src/components/news/
+  Agrupa componentes visuales del portal: header, footer, cards de noticias, home sections, comentarios, primas visuales, share buttons, etc.
+
+- src/components/auth/
+  Contiene la autenticación, menú de usuario, login y dialog de sesión.
+
+- src/lib/
+  Maneja conexión con Supabase, API de artículos, autenticación, utilidad de datos y lógica compartida.
+
+- src/hooks/
+  Hooks para sesión, perfil y carga de noticias relacionadas.
+
+- supabase/schema.sql
+  Script SQL que define la base de datos del proyecto: perfiles, artículos, tags, categorías, vistas, comentarios, likes y políticas.
+
+- public/
+  Archivos públicos del sitio, como logo, favicon, manifest y meta assets.
+
+3. FLUJO DE CONTENIDO Y NAVEGACION
+----------------------------------
+La web está orientada a un portal editorial con varias capas de navegación:
+
+- Portada principal: muestra noticias destacadas, principales, más leídas y artículos por categoría.
+- Sección de noticias destacadas: cards con cover, categoría, resumen y metadata.
+- Noticias por categoría: páginas filtradas por tema.
+- Noticias por etiqueta: navegación temática con tags.
+- Artículo individual: vista completa de la nota con contenido HTML seguro, metadata, autor, fecha, lectura, vistas y shares.
+- Perfil de usuario: visualiza nombre, correo, rol y permite cerrar sesión con confirmación.
+- Panel administrativo: acceso para editor/admin, para gestión de contenido y articulos.
+
+4. SISTEMA DE AUTENTICACION Y PERFIL
+-------------------------------------
+Se implementó un sistema de usuarios con autenticación vía Supabase. Entre las funcionalidades agregadas destacan:
+
+- Login con email/password
+- Registro con nombre completo
+- Login con Google/Facebook (según configuración habilitada en Supabase)
+- Recuperación de contraseña
+- Sesión persistente con auto-refresh
+- Carga de perfil con avatar y nombre real
+- Menú de usuario con avatar y acceso a perfil/admin
+- Confirmación antes de cerrar sesión
+
+La lógica está centralizada en:
+- src/hooks/useAuth.tsx
+- src/lib/auth.ts
+- src/lib/supabase.ts
+
+El perfil de usuario se toma desde la tabla public.profiles y se sincroniza con auth.users. Se incorpora soporte para datos de Google, como nombre y foto, usando campos como:
+- full_name
+- name
+- display_name
+- avatar_url
+- picture
+- avatar
+
+Esto evita que los usuarios de Google queden con letras iniciales o sin imagen de perfil.
+
+5. GESTION DE ARTICULOS Y VISTAS REALES
+-----------------------------------------
+Los artículos están almacenados y consultados desde Supabase. El sistema incluye:
+- título, resumen, cuerpo, cover image, autor, etiquetas, categoría, fecha, estado published
+- conteo de vistas
+- filtro por estado y fecha de publicación
+- orden por fecha, relevancia y popularidad
+
+La lógica central de artículos está en:
+- src/lib/api.ts
+
+Adicionalmente, el sistema de vistas reales fue implementado para contar visitas de distintos tipos de usuarios:
+- usuarios anónimos
+- usuarios logueados
+- visitas con sesión unica por navegador
+- evitar contar duplicados en la misma sesión
+
+La vista se registra al entrar a la noticia y se guarda en la tabla article_views, con trigger que incrementa el contador en articles.views_count. Esto hace que los números de vistas sean reales y no meramente manuales o estáticos.
+
+6. SISTEMA DE COMENTARIOS
+-------------------------
+Se implementó un bloque completo de comentarios con características robustas:
+
+- Publicación de comentarios principales
+- Respuestas a comentarios (nested replies)
+- Like por comentario
+- Eliminar comentarios propios
+- Orden por:
+  - comentarios del usuario actual primero
+  - mayor cantidad de likes
+  - fecha reciente
+- Mensajes de error amigables
+- UI animada al publicar y al dar like
+- Carga inicial con loading y skeletons
+- Actualización en tiempo real mediante subscriptions a Supabase Realtime
+
+Componentes y archivos relevantes:
+- src/components/news/CommentsSection.tsx
+- supabase/comments-schema.sql
+- supabase/functions/moderate-comment/index.ts
+
+El sistema soporta la experiencia de una comunidad editorial moderna, parecida a plataformas como YouTube.
+
+7. MODERACION DE COMENTARIOS Y CONTENIDO NO APTO
+-------------------------------------------------
+Para proteger el contenido, la app incorpora una Edge Function de moderación. La función:
+- recibe el comentario del frontend
+- valida contenido ofensivo o inapropiado
+- usa OpenAI Moderations API
+- bloquea comentarios con lenguaje no apto
+- devuelve un mensaje claro al usuario sin exponer detalles técnicos
+
+La moderación se implementó para evitar abuso, lenguaje ofensivo o contenido que no sea aceptable para la comunidad.
+
+8. LIKES Y UX DE INTERACCION
+---------------------------
+Los likes fueron integrados como una funcionalidad real:
+- cada usuario puede dar like
+- se evita duplicación por unique constraint
+- sale una animación al interactuar
+- el contador refleja el resultado en tiempo real
+- la UI se actualiza sin necesidad de recargar la pagina
+
+Esto mejora mucho la experiencia del usuario y hace la interfaz más dinámica.
+
+9. RESPUESTA A COMENTARIOS Y COMPORTAMIENTO DE UX
+--------------------------------------------------
+Se perfeccionó la experiencia de respuesta a comentarios para que sea natural:
+- el usuario puede responder directamente desde el hilo
+- la caja de respuesta aparece junto al comentario correspondiente
+- se puede cancelar sin romper la experiencia
+- la escritura principal sigue siendo clara y separada del flujo de comentarios
+
+Esto genera una experiencia mucho más parecida a la navegación en redes sociales o plataformas de video.
+
+10. HEADER Y LOGO
+-----------------
+El header incluye logo, navegación, clima, perfil y acceso rápido a funciones principales.
+
+Se corrigió la referencia del logo, que debía apuntar a la imagen real dentro de public/logo.png. Esto fue necesario porque el sistema anterior estaba usando un asset generado que no se resolvía correctamente. El logo quedó estable y visible tanto en header como en footer.
+
+11. FOOTER
+----------
+El footer es parte del sistema de marca y cierre del sitio. Incluye:
+- marca QAP ChacoNews
+- identidad visual consistente
+- enclavado con estilo premium
+- integración del logo y estructura uniforme con el header
+
+12. CLIMA EN EL HEADER
+---------------------
+Se integró un widget de clima en el header para mostrar el estado del tiempo actual en Asunción, Paraguay, usando OpenWeatherMap. Su lógica contempla:
+- fetch inicial del clima actual
+- temperatura actual redondeada
+- icono representativo
+- manejo de carga
+- manejo de errores
+- placeholder discreto cuando la API tarda o falla
+- interacción clickeable para abrir detalle del pronóstico
+
+Esto aporta real-time info al usuario mientras navega el portal.
+
+13. MODAL DE DETALLE DEL CLIMA
+------------------------------
+El widget del clima es clickeable y abre un modal con:
+- clima detallado actual
+- sensación térmica
+- humedad
+- velocidad del viento
+- descripcion general
+- pronostico de los siguientes 5 dias
+- icono y temperatura aproximada maxima/minima por día
+- cierre por clic fuera, ESC o boton manual
+
+La solicitud se realiza con OpenWeatherMap y la API key se reutiliza en una variable centralizada/env.
+
+14. FALLBACKS, LOADING Y ERRORES
+--------------------------------
+Se incorporaron varias capas de protección para la UX:
+- loading spinners/skeletons
+- mensajes amigables en vez de errores técnicos
+- fallback visual si falla el fetch del clima o la carga de imagen
+- validación de respuesta HTTP y errores de API
+- protección para sesión vencida o no autenticada
+
+15. ASPECTOS DE ESTILO Y DISEÑO
+--------------------------------
+La pagina tiene un diseño moderno y editorial con:
+- header rígido y elegante
+- cards de noticias con spacing premium
+- sombras suaves
+- letras grandes y jerarquía visual clara
+- uso de bordes, redondeados y contrastes sostenidos
+- un estilo visual coherente con la identidad QAP ChacoNews
+
+16. SEGURIDAD Y POLITICAS
+------------------------
+Se trabajó con un esquema de seguridad robusto:
+- RLS (Row Level Security) en tablas relevantes
+- permisos públicos para lectura de noticias y perfiles
+- acceso de escritura restringido para usuarios autenticados/editor/admin
+- validación de usuarios para likes y comentarios
+- Edge Function para moderación con OpenAI
+
+Esto evita abuso y mantiene el portal funcional y controlado.
+
+17. DATOS Y BASE DE SUPABASE
+----------------------------
+La base de datos incluye tablas esenciales para el funcionamiento del portal, por ejemplo:
+- profiles
+- categories
+- tags
+- articles
+- article_tags
+- newsletter_subscribers
+- article_views
+- homepage_sections
+- site_settings
+- comments
+- comment_likes
+
+También se agregaron triggers para:
+- actualizar timestamps
+- crear perfiles al registrar usuario
+- sincronizar datos del perfil con auth.users
+- actualizar views_count al insertar una vista
+
+18. EXPERIMENTACION Y MEJORAS UX
+--------------------------------
+Se realizaron varios ajustes de experiencia alineados con UX moderna:
+- confirmación antes de cerrar sesión
+- animaciones suaves al publicar comentarios y dar likes
+- microinteracciones en botones y tarjetas
+- feedback visual del estado del usuario
+- manejo de respuestas y comentarios anidados
+- orden inteligente y relevante de contenido
+- sin recargas obligatorias para reflejar cambios
+
+19. ESTADO ACTUAL DEL PROYECTO
+-----------------------------
+El sitio se encuentra en un estado funcional y muy avanzado. Actualmente incluye:
+- portada y navegación
+- noticias por categoria y tags
+- vista de noticia completa
+- cuenta de vistas reales
+- sistema de autenticación
+- perfil de usuario
+- menú de usuario
+- cierre de sesión con confirmación
+- comentarios con likes, respuestas y moderación
+- modal de clima
+- logo y footer corregidos
+- diseño tipográfico y visual consistente
+
+20. CONCLUSION
+--------------
+QAP ChacoNews ya no es solo una landing visual: es un portal con lógica de contenido, autenticación, comunidad e interacción real. La combinación de React + Supabase + Edge Functions + UI moderna hace que la aplicación tenga una base sólida, tanto para uso real como para expansión futura.
+
+Los cambios realizados mejoran la funcionalidad, la experiencia del usuario, la seguridad, la integridad del contenido y la percepción profesional del proyecto. El sitio queda preparado para seguir creciendo con nuevas secciones, usuarios, herramientas y contenido.
+
+FIN DEL INFORME
+===============
