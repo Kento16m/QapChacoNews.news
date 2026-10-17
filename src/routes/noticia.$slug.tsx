@@ -42,10 +42,31 @@ function AuthorAvatar({ name, url, size = "h-11 w-11" }: { name: string; url: st
   );
 }
 
+function normalizeArticleContent(html: string) {
+  const trimmed = html.trim();
+  if (!trimmed) return "";
+
+  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(trimmed);
+  if (looksLikeHtml) return trimmed;
+
+  return trimmed
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => `<p>${block.replace(/\n+/g, " ")}</p>`)
+    .join("");
+}
+
 function SafeHtml({ html }: { html: string }) {
   const [clean, setClean] = useState("");
-  useEffect(() => setClean(DOMPurify.sanitize(html)), [html]);
-  return <div className="prose-news mx-auto w-full max-w-3xl" dangerouslySetInnerHTML={{ __html: clean }} />;
+
+  useEffect(() => {
+    const normalized = normalizeArticleContent(html);
+    setClean(DOMPurify.sanitize(normalized));
+  }, [html]);
+
+  return <div className="prose-news mx-auto w-full max-w-4xl" dangerouslySetInnerHTML={{ __html: clean }} />;
 }
 
 function ArticleSkeleton() {
@@ -129,7 +150,7 @@ function ArticlePage() {
           </div>
         </header>
 
-        <figure className="reveal mx-auto mt-10 max-w-4xl">
+        <figure className="reveal mx-auto mt-10 w-full max-w-[1200px]">
           <div className="aspect-[16/9] overflow-hidden rounded-[28px] bg-transparent shadow-soft md:aspect-[21/9]">
             <CoverImage src={a.cover_image_url} alt={a.title} className="bg-transparent" />
           </div>

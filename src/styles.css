@@ -146,6 +146,7 @@
   font-size: 1.0625rem;
   line-height: 1.8;
   & > * + * { margin-top: 1.25em; }
+  & p { margin: 0 0 1.2em; }
   & > p:first-of-type { font-size: 1.25rem; }
   & > p:first-of-type::first-letter {
     float: left; font-family: var(--font-display); font-weight: 700;
