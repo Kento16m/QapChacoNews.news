@@ -47,15 +47,75 @@ function normalizeArticleContent(html: string) {
   if (!trimmed) return "";
 
   const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(trimmed);
-  if (looksLikeHtml) return trimmed;
+  if (!looksLikeHtml) {
+    return trimmed
+      .replace(/\r\n/g, "\n")
+      .split(/\n{2,}/)
+      .map((block) => block.trim())
+      .filter(Boolean)
+      .map((block) => `<p>${block.replace(/\n+/g, " ")}</p>`)
+      .join("");
+  }
 
-  return trimmed
-    .replace(/\r\n/g, "\n")
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block) => `<p>${block.replace(/\n+/g, " ")}</p>`)
-    .join("");
+  const container = document.createElement("div");
+  container.innerHTML = trimmed;
+
+  const fragment = document.createDocumentFragment();
+  const blockTags = new Set([
+    "P",
+    "DIV",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "UL",
+    "OL",
+    "LI",
+    "BLOCKQUOTE",
+    "FIGURE",
+    "IMG",
+    "TABLE",
+    "PRE",
+    "HR",
+    "SECTION",
+    "ARTICLE",
+  ]);
+
+  let paragraph: HTMLParagraphElement | null = null;
+  const flushParagraph = () => {
+    if (paragraph && paragraph.childNodes.length) {
+      fragment.appendChild(paragraph);
+      paragraph = null;
+    }
+  };
+
+  for (const child of Array.from(container.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      const value = child.textContent ?? "";
+      if (!value.trim()) continue;
+
+      if (!paragraph) paragraph = document.createElement("p");
+      paragraph.appendChild(child.cloneNode(true));
+      continue;
+    }
+
+    if (child.nodeType !== Node.ELEMENT_NODE) continue;
+
+    const tagName = (child as Element).tagName.toUpperCase();
+    if (blockTags.has(tagName)) {
+      flushParagraph();
+      fragment.appendChild(child.cloneNode(true));
+      continue;
+    }
+
+    if (!paragraph) paragraph = document.createElement("p");
+    paragraph.appendChild(child.cloneNode(true));
+  }
+
+  flushParagraph();
+  return fragment.childNodes.length ? (fragment.firstChild ? Array.from(fragment.childNodes).map((node) => node.outerHTML ?? node.textContent ?? "").join("") : "") : "";
 }
 
 function SafeHtml({ html }: { html: string }) {
