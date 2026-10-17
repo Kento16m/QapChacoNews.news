@@ -45,7 +45,7 @@ function AuthorAvatar({ name, url, size = "h-11 w-11" }: { name: string; url: st
 function SafeHtml({ html }: { html: string }) {
   const [clean, setClean] = useState("");
   useEffect(() => setClean(DOMPurify.sanitize(html)), [html]);
-  return <div className="prose-news" dangerouslySetInnerHTML={{ __html: clean }} />;
+  return <div className="prose-news mx-auto w-full max-w-3xl" dangerouslySetInnerHTML={{ __html: clean }} />;
 }
 
 function ArticleSkeleton() {
@@ -106,17 +106,17 @@ function ArticlePage() {
   return (
     <>
       <ReadingProgress />
-      <article className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <article className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <nav aria-label="Migas de pan" className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/" className="hover:text-primary">Inicio</Link>
           {a.category && (<><ChevronRight className="h-3.5 w-3.5" /><Link to="/categoria/$slug" params={{ slug: a.category.slug }} className="hover:text-primary">{a.category.name}</Link></>)}
         </nav>
 
-        <header className="mt-6 max-w-5xl">
+        <header className="mt-8 max-w-4xl">
           <CategoryBadge category={a.category} />
           <h1 className="mt-4 max-w-none break-words font-display text-[clamp(2.25rem,5vw,4rem)] font-bold leading-[0.92] tracking-[-0.04em] text-foreground hyphens-auto">{a.title}</h1>
           {a.subtitle && <p className="mt-5 text-lg text-muted-foreground sm:text-xl">{a.subtitle}</p>}
-          <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
+          <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
             <div className="flex items-center gap-3">
               <AuthorAvatar name={authorName} url={a.author?.avatar_url ?? null} />
               <div>
@@ -129,23 +129,23 @@ function ArticlePage() {
           </div>
         </header>
 
-        <figure className="reveal mt-8">
-          <div className="aspect-[16/9] overflow-hidden rounded-3xl bg-transparent shadow-soft md:aspect-[21/9]">
+        <figure className="reveal mx-auto mt-10 max-w-4xl">
+          <div className="aspect-[16/9] overflow-hidden rounded-[28px] bg-transparent shadow-soft md:aspect-[21/9]">
             <CoverImage src={a.cover_image_url} alt={a.title} className="bg-transparent" />
           </div>
-          {a.excerpt && <figcaption className="mt-3 text-sm text-muted-foreground">{a.excerpt}</figcaption>}
+          {a.excerpt && <figcaption className="mt-4 text-sm text-muted-foreground">{a.excerpt}</figcaption>}
         </figure>
 
-        <div className="mt-6 lg:hidden"><ShareButtons title={a.title} /></div>
+        <div className="mt-8 lg:hidden"><ShareButtons title={a.title} /></div>
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[56px_minmax(0,720px)_minmax(0,1fr)] lg:gap-12">
+        <div className="mx-auto mt-12 max-w-5xl gap-10 lg:grid lg:grid-cols-[56px_minmax(0,1fr)_minmax(0,280px)] lg:gap-12">
           <aside className="hidden lg:block"><div className="sticky top-40"><ShareButtons title={a.title} vertical /></div></aside>
 
           <div className="min-w-0">
             <SafeHtml html={a.content} />
 
             {a.tags.length > 0 && (
-              <div className="mt-10 flex flex-wrap items-center gap-2 border-t pt-6">
+              <div className="mt-12 flex flex-wrap items-center gap-2 border-t pt-6">
                 <span className="mr-1 text-sm font-bold">Etiquetas:</span>
                 {a.tags.map((t) => (
                   <Link key={t.id} to="/etiqueta/$slug" params={{ slug: t.slug }} className="rounded-full border bg-card px-3.5 py-1.5 text-sm font-semibold transition hover:border-primary hover:text-primary">#{t.name}</Link>
@@ -153,7 +153,7 @@ function ArticlePage() {
               </div>
             )}
 
-            <section className="mt-8 flex items-start gap-4 rounded-3xl bg-card p-6 shadow-soft" aria-label="Sobre el autor">
+            <section className="mt-12 flex items-start gap-4 rounded-3xl bg-card p-6 shadow-soft" aria-label="Sobre el autor">
               <AuthorAvatar name={authorName} url={a.author?.avatar_url ?? null} size="h-16 w-16" />
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-primary">Sobre el autor</p>
@@ -162,7 +162,7 @@ function ArticlePage() {
               </div>
             </section>
 
-            <div className="mt-6 lg:hidden"><ShareButtons title={a.title} /></div>
+            <div className="mt-8 lg:hidden"><ShareButtons title={a.title} /></div>
           </div>
 
           <aside className="hidden lg:block">
@@ -170,7 +170,9 @@ function ArticlePage() {
           </aside>
         </div>
 
-        <CommentsSection articleId={a.id} />
+        <div className="mx-auto mt-12 max-w-4xl">
+          <CommentsSection articleId={a.id} />
+        </div>
 
         <section className="reveal mt-20">
           <SectionTitle>Sigue leyendo</SectionTitle>
