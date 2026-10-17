@@ -46,10 +46,11 @@ function normalizeArticleContent(html: string) {
   const trimmed = html.trim();
   if (!trimmed) return "";
 
-  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(trimmed);
+  const normalized = trimmed.replace(/\r\n/g, "\n");
+  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(normalized);
+
   if (!looksLikeHtml) {
-    return trimmed
-      .replace(/\r\n/g, "\n")
+    return normalized
       .split(/\n{2,}/)
       .map((block) => block.trim())
       .filter(Boolean)
@@ -57,65 +58,24 @@ function normalizeArticleContent(html: string) {
       .join("");
   }
 
-  const container = document.createElement("div");
-  container.innerHTML = trimmed;
+  const blocks = normalized
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
 
-  const fragment = document.createDocumentFragment();
-  const blockTags = new Set([
-    "P",
-    "DIV",
-    "H1",
-    "H2",
-    "H3",
-    "H4",
-    "H5",
-    "H6",
-    "UL",
-    "OL",
-    "LI",
-    "BLOCKQUOTE",
-    "FIGURE",
-    "IMG",
-    "TABLE",
-    "PRE",
-    "HR",
-    "SECTION",
-    "ARTICLE",
-  ]);
-
-  let paragraph: HTMLParagraphElement | null = null;
-  const flushParagraph = () => {
-    if (paragraph && paragraph.childNodes.length) {
-      fragment.appendChild(paragraph);
-      paragraph = null;
-    }
-  };
-
-  for (const child of Array.from(container.childNodes)) {
-    if (child.nodeType === Node.TEXT_NODE) {
-      const value = child.textContent ?? "";
-      if (!value.trim()) continue;
-
-      if (!paragraph) paragraph = document.createElement("p");
-      paragraph.appendChild(child.cloneNode(true));
-      continue;
-    }
-
-    if (child.nodeType !== Node.ELEMENT_NODE) continue;
-
-    const tagName = (child as Element).tagName.toUpperCase();
-    if (blockTags.has(tagName)) {
-      flushParagraph();
-      fragment.appendChild(child.cloneNode(true));
-      continue;
-    }
-
-    if (!paragraph) paragraph = document.createElement("p");
-    paragraph.appendChild(child.cloneNode(true));
+  if (blocks.length > 1) {
+    return blocks
+      .map((block) => {
+        const hasBlockElement = /<\/?(?:p|div|h[1-6]|ul|ol|li|blockquote|figure|table|pre|section|article)>/i.test(block);
+        return hasBlockElement ? block : `<p>${block.replace(/\n+/g, " ")}</p>`;
+      })
+      .join("");
   }
 
-  flushParagraph();
-  return fragment.childNodes.length ? (fragment.firstChild ? Array.from(fragment.childNodes).map((node) => node.outerHTML ?? node.textContent ?? "").join("") : "") : "";
+  const hasBlockElement = /<\/?(?:p|div|h[1-6]|ul|ol|li|blockquote|figure|table|pre|section|article)>/i.test(normalized);
+  if (hasBlockElement) return normalized;
+
+  return `<p>${normalized.replace(/\n+/g, " ")}</p>`;
 }
 
 function SafeHtml({ html }: { html: string }) {
