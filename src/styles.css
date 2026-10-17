@@ -152,6 +152,8 @@
     float: left; font-family: var(--font-display); font-weight: 700;
     font-size: 4.2em; line-height: 0.85; margin: 0.08em 0.12em 0 0; color: var(--primary);
   }
+  & strong { font-weight: 800; }
+  & em { font-style: italic; }
   & h2 { font-family: var(--font-display); font-size: 1.85rem; font-weight: 700; line-height: 1.25; margin-top: 2em; }
   & h3 { font-size: 1.3rem; font-weight: 800; margin-top: 1.75em; }
   & blockquote {
@@ -182,6 +184,20 @@
   }
   &:hover img {
     transform: scale(1.06);
+  }
+}
+@layer components {
+  .rich-text-editor {
+    &:empty::before {
+      content: attr(data-placeholder);
+      color: var(--muted-foreground);
+      pointer-events: none;
+    }
+    & p { margin: 0 0 1em; }
+    & strong { font-weight: 800; }
+    & em { font-style: italic; }
+    & ul, & ol { margin: 1em 0; padding-left: 1.5em; }
+    & li + li { margin-top: 0.35em; }
   }
 }
 @utility animate-ticker {

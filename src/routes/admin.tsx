@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { FileImage, ImageUp, LayoutDashboard, Mail, Newspaper, PlusCircle, Save, Sparkles, Users } from "lucide-react";
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useCategories } from "@/hooks/use-news";
@@ -156,6 +156,31 @@ const getInitials = (name: string | null | undefined) =>
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("") || "U";
 
+function RichTextToolbar({ onCommand }: { onCommand: (command: "bold" | "italic" | "insertUnorderedList") => void }) {
+  const buttons = [
+    { key: "bold", label: "B", title: "Negrita" },
+    { key: "italic", label: "I", title: "Cursiva" },
+    { key: "insertUnorderedList", label: "• Lista", title: "Lista" },
+  ] as const;
+
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-input bg-background p-2">
+      {buttons.map(({ key, label, title }) => (
+        <button
+          key={key}
+          type="button"
+          title={title}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => onCommand(key)}
+          className="rounded-lg border border-input bg-card px-2.5 py-1.5 text-sm font-semibold text-foreground transition hover:border-primary hover:text-primary"
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function UserAvatar({
   name,
   avatarUrl,
@@ -262,6 +287,7 @@ function AdminPage() {
   const [coverGallery, setCoverGallery] = useState<string[]>([]);
   const [activeCoverIndex, setActiveCoverIndex] = useState(0);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const richTextRef = useRef<HTMLDivElement | null>(null);
 
   const filteredArticles = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
@@ -359,6 +385,27 @@ function AdminPage() {
     queryFn: () => getArticleCommentsForAdmin(managementArticleId!),
     enabled: canAccess && !!managementArticleId,
   });
+
+  useEffect(() => {
+    if (richTextRef.current && richTextRef.current.innerHTML !== form.content) {
+      richTextRef.current.innerHTML = form.content || "";
+    }
+  }, [form.content]);
+
+  const executeRichTextCommand = (command: "bold" | "italic" | "insertUnorderedList") => {
+    if (!richTextRef.current) return;
+
+    richTextRef.current.focus();
+    document.execCommand(command, false);
+
+    const html = richTextRef.current.innerHTML;
+    setForm((prev) => ({ ...prev, content: html }));
+  };
+
+  const handleRichTextInput = () => {
+    if (!richTextRef.current) return;
+    setForm((prev) => ({ ...prev, content: richTextRef.current?.innerHTML ?? prev.content }));
+  };
 
   useEffect(() => {
     if (!selectedId) {
@@ -1444,15 +1491,22 @@ function AdminPage() {
                 />
               </label>
 
-              <label className="space-y-2 md:col-span-2">
-                <span className="text-sm font-medium text-foreground">Contenido</span>
-                <textarea
-                  value={form.content}
-                  onChange={(event) => setForm((prev) => ({ ...prev, content: event.target.value }))}
-                  rows={12}
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition focus:border-primary"
+              <div className="space-y-2 md:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-foreground">Contenido</span>
+                  <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Editor enriquecido</span>
+                </div>
+                <RichTextToolbar onCommand={executeRichTextCommand} />
+                <div
+                  ref={richTextRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={handleRichTextInput}
+                  data-placeholder="Escribí la nota completa…"
+                  className="min-h-[320px] w-full rounded-xl border border-input bg-background px-3 py-3 text-sm leading-7 text-foreground outline-none transition focus:border-primary prose-news rich-text-editor"
+                  dangerouslySetInnerHTML={{ __html: form.content || "" }}
                 />
-              </label>
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-3">
