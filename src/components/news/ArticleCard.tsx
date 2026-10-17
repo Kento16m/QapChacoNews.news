@@ -27,6 +27,8 @@ export function ArticleCard({ article, variant = "default", className }: { artic
   }
 
   if (variant === "mini") {
+    const meta = article.category?.name ? `${article.category.name} · ${timeAgo(article.published_at)}` : timeAgo(article.published_at);
+
     return (
       <article className={cn("card-lift img-zoom relative flex items-center gap-3 rounded-2xl bg-card p-3 shadow-soft", className)}>
         <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl">
@@ -34,7 +36,7 @@ export function ArticleCard({ article, variant = "default", className }: { artic
         </div>
         <div className="min-w-0">
           <h3 className="line-clamp-2 text-sm font-bold leading-snug">{link}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">{article.category?.name} · {timeAgo(article.published_at)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{meta}</p>
         </div>
       </article>
     );
@@ -60,7 +62,7 @@ export function ArticleCard({ article, variant = "default", className }: { artic
         <CoverImage src={article.cover_image_url} alt={article.title} />
         <div className="absolute left-3 top-3"><CategoryBadge category={article.category} /></div>
       </div>
-      <div className="p-5">
+      <div className="p-4 md:p-5">
         <h3 className="font-bold leading-snug text-balance group-hover:text-primary">{link}</h3>
         {article.excerpt && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{article.excerpt}</p>}
         <p className="mt-3 text-xs text-muted-foreground">

@@ -586,7 +586,7 @@ export function SiteHeader() {
 
   return (
     <>
-      <div className="bg-navy text-navy-foreground">
+      <div className="hidden bg-navy text-navy-foreground md:flex">
         <div className="mx-auto flex h-auto min-h-10 max-w-7xl flex-wrap items-center gap-3 px-4 py-2 sm:px-6">
           <span className="shrink-0 text-[11px] text-navy-muted sm:text-xs">{today}</span>
           <div className="min-w-0 flex-1">
@@ -611,12 +611,32 @@ export function SiteHeader() {
       </div>
 
       <header className="glass sticky top-0 z-40 border-b">
-        <div className="mx-auto grid max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2">
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
+          <div className="hidden md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center md:gap-4">
+            <div className="flex items-center gap-2">
+              <Link
+                to="/"
+                aria-label="QAP ChacoNews, inicio"
+                className="inline-flex rounded-xl bg-navy px-3 py-1.5"
+              >
+                <Logo className="h-9" />
+              </Link>
+            </div>
+
+            <SearchBox className="mx-auto w-full max-w-md" />
+
+            <div className="flex items-center justify-end gap-2">
+              <WeatherForecastModal />
+              <ThemeToggle />
+              <AuthControl />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 md:hidden">
             <Sheet>
               <SheetTrigger
                 aria-label="Abrir menú"
-                className="grid h-10 w-10 place-items-center rounded-full hover:bg-secondary lg:hidden"
+                className="grid h-10 w-10 place-items-center rounded-full hover:bg-secondary"
               >
                 <Menu className="h-5 w-5" />
               </SheetTrigger>
@@ -648,10 +668,7 @@ export function SiteHeader() {
                   </div>
                 </div>
                 <nav className="mt-6 flex flex-col gap-1">
-                  <Link
-                    to="/"
-                    className="rounded-xl px-3 py-2.5 font-semibold hover:bg-navy-border"
-                  >
+                  <Link to="/" className="rounded-xl px-3 py-2.5 font-semibold hover:bg-navy-border">
                     Inicio
                   </Link>
                   {cats?.map((c) => (
@@ -667,21 +684,18 @@ export function SiteHeader() {
                 </nav>
               </SheetContent>
             </Sheet>
-            <Link
-              to="/"
-              aria-label="QAP ChacoNews, inicio"
-              className="rounded-xl bg-navy px-3 py-1.5"
-            >
+
+            <Link to="/" aria-label="QAP ChacoNews, inicio" className="flex flex-1 justify-center">
               <Logo className="h-9" />
             </Link>
-          </div>
-          <SearchBox className="mx-auto hidden w-full max-w-md md:block" />
-          <div className="flex items-center gap-2">
-            <WeatherForecastModal />
-            <ThemeToggle />
-            <AuthControl />
+
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <AuthControl />
+            </div>
           </div>
         </div>
+
         <nav
           aria-label="Categorías"
           className="mx-auto hidden max-w-7xl items-center gap-1 overflow-x-auto px-4 pb-2 sm:px-6 lg:flex"

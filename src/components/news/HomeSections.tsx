@@ -54,12 +54,15 @@ export function LatestPanel() {
       {isError ? <p className="text-sm text-navy-muted">Error al cargar.</p> : (
         <ol className="flex flex-1 flex-col divide-y divide-navy-border">
           {isLoading ? Array.from({ length: 5 }).map((_, i) => <li key={i} className="py-3"><div className="h-10 animate-pulse rounded-lg bg-navy-border" /></li>)
-            : data?.map((a) => (
-              <li key={a.id} className="group relative py-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">{a.category?.name} · <span className="text-navy-muted">{timeAgo(a.published_at)}</span></p>
-                <Link to="/noticia/$slug" params={{ slug: a.slug }} className="mt-1 line-clamp-2 text-sm font-semibold leading-snug group-hover:text-primary after:absolute after:inset-0">{a.title}</Link>
-              </li>
-            ))}
+            : data?.map((a) => {
+              const meta = a.category?.name ? `${a.category.name} · ${timeAgo(a.published_at)}` : timeAgo(a.published_at);
+              return (
+                <li key={a.id} className="group relative py-3.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-primary"><span className="text-navy-muted">{meta}</span></p>
+                  <Link to="/noticia/$slug" params={{ slug: a.slug }} className="mt-1 line-clamp-2 text-sm font-semibold leading-snug group-hover:text-primary after:absolute after:inset-0">{a.title}</Link>
+                </li>
+              );
+            })}
         </ol>
       )}
     </aside>
