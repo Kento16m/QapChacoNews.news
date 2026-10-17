@@ -632,8 +632,8 @@ export function SiteHeader() {
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 md:hidden">
-            <div className="flex flex-1 items-center justify-start">
+          <div className="flex items-center justify-between gap-2 md:hidden">
+            <div className="flex items-center gap-2">
               <Sheet>
                 <SheetTrigger
                   aria-label="Abrir menú"
@@ -687,7 +687,7 @@ export function SiteHeader() {
               </Sheet>
             </div>
 
-            <div className="flex flex-1 justify-center">
+            <div className="flex flex-1 justify-start">
               <Link to="/" aria-label="QAP ChacoNews, inicio" className="inline-flex">
                 <Logo className="h-9" />
               </Link>
