@@ -156,11 +156,10 @@ const getInitials = (name: string | null | undefined) =>
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("") || "U";
 
-function RichTextToolbar({ onCommand }: { onCommand: (command: "bold" | "italic" | "insertUnorderedList") => void }) {
+function RichTextToolbar({ onFormat }: { onFormat: (format: "bold" | "italic") => void }) {
   const buttons = [
     { key: "bold", label: "B", title: "Negrita" },
     { key: "italic", label: "I", title: "Cursiva" },
-    { key: "insertUnorderedList", label: "• Lista", title: "Lista" },
   ] as const;
 
   return (
@@ -170,8 +169,7 @@ function RichTextToolbar({ onCommand }: { onCommand: (command: "bold" | "italic"
           key={key}
           type="button"
           title={title}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => onCommand(key)}
+          onClick={() => onFormat(key)}
           className="rounded-lg border border-input bg-card px-2.5 py-1.5 text-sm font-semibold text-foreground transition hover:border-primary hover:text-primary"
         >
           {label}
@@ -287,7 +285,7 @@ function AdminPage() {
   const [coverGallery, setCoverGallery] = useState<string[]>([]);
   const [activeCoverIndex, setActiveCoverIndex] = useState(0);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
-  const richTextRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const filteredArticles = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
@@ -386,25 +384,25 @@ function AdminPage() {
     enabled: canAccess && !!managementArticleId,
   });
 
-  useEffect(() => {
-    if (richTextRef.current && richTextRef.current.innerHTML !== form.content) {
-      richTextRef.current.innerHTML = form.content || "";
-    }
-  }, [form.content]);
+  const applyTextFormat = (format: "bold" | "italic") => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
 
-  const executeRichTextCommand = (command: "bold" | "italic" | "insertUnorderedList") => {
-    if (!richTextRef.current) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = textarea.value.slice(start, end) || "texto";
+    const tag = format === "bold" ? "<strong>" : "<em>";
+    const closingTag = format === "bold" ? "</strong>" : "</em>";
+    const nextValue = `${textarea.value.slice(0, start)}${tag}${selected}${closingTag}${textarea.value.slice(end)}`;
 
-    richTextRef.current.focus();
-    document.execCommand(command, false);
+    setForm((prev) => ({ ...prev, content: nextValue }));
 
-    const html = richTextRef.current.innerHTML;
-    setForm((prev) => ({ ...prev, content: html }));
-  };
-
-  const handleRichTextInput = () => {
-    if (!richTextRef.current) return;
-    setForm((prev) => ({ ...prev, content: richTextRef.current?.innerHTML ?? prev.content }));
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const newStart = start + tag.length;
+      const newEnd = newStart + selected.length;
+      textarea.setSelectionRange(newStart, newEnd);
+    });
   };
 
   useEffect(() => {
@@ -1494,17 +1492,16 @@ function AdminPage() {
               <div className="space-y-2 md:col-span-2">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-medium text-foreground">Contenido</span>
-                  <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Editor enriquecido</span>
+                  <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Formato simple</span>
                 </div>
-                <RichTextToolbar onCommand={executeRichTextCommand} />
-                <div
-                  ref={richTextRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={handleRichTextInput}
-                  data-placeholder="Escribí la nota completa…"
-                  className="min-h-[320px] w-full rounded-xl border border-input bg-background px-3 py-3 text-sm leading-7 text-foreground outline-none transition focus:border-primary prose-news rich-text-editor"
-                  dangerouslySetInnerHTML={{ __html: form.content || "" }}
+                <RichTextToolbar onFormat={applyTextFormat} />
+                <textarea
+                  ref={textareaRef}
+                  value={form.content}
+                  onChange={(event) => setForm((prev) => ({ ...prev, content: event.target.value }))}
+                  rows={12}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm leading-7 text-foreground outline-none transition focus:border-primary"
+                  placeholder="Escribí la nota completa…"
                 />
               </div>
             </div>
