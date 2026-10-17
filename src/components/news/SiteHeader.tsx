@@ -632,62 +632,66 @@ export function SiteHeader() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2 md:hidden">
-            <Sheet>
-              <SheetTrigger
-                aria-label="Abrir menú"
-                className="grid h-10 w-10 place-items-center rounded-full hover:bg-secondary"
-              >
-                <Menu className="h-5 w-5" />
-              </SheetTrigger>
-              <SheetContent side="left" className="w-80 bg-navy text-navy-foreground">
-                <SheetTitle className="sr-only">Menú</SheetTitle>
-                <Logo className="h-12" />
-                <DrawerAuth />
-                <SearchBox className="mt-6 text-foreground" />
-                <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-navy-muted">
-                    Acciones rápidas
-                  </p>
-                  <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 p-2">
-                    <CurrencyTicker />
+          <div className="flex items-center justify-end gap-2 md:hidden">
+            <div className="flex flex-1 items-center justify-start">
+              <Sheet>
+                <SheetTrigger
+                  aria-label="Abrir menú"
+                  className="grid h-10 w-10 place-items-center rounded-full hover:bg-secondary"
+                >
+                  <Menu className="h-5 w-5" />
+                </SheetTrigger>
+                <SheetContent side="left" className="w-80 bg-navy text-navy-foreground">
+                  <SheetTitle className="sr-only">Menú</SheetTitle>
+                  <Logo className="h-12" />
+                  <DrawerAuth />
+                  <SearchBox className="mt-6 text-foreground" />
+                  <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-navy-muted">
+                      Acciones rápidas
+                    </p>
+                    <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 p-2">
+                      <CurrencyTicker />
+                    </div>
+                    <div className="mt-3 flex items-center gap-3 pt-1">
+                      {socials.map(({ icon: I, label, href, color }) => (
+                        <a
+                          key={label}
+                          href={href}
+                          aria-label={label}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`grid h-9 w-9 place-items-center rounded-full text-white transition hover:scale-105 ${color}`}
+                        >
+                          <I />
+                        </a>
+                      ))}
+                    </div>
                   </div>
-                  <div className="mt-3 flex items-center gap-3 pt-1">
-                    {socials.map(({ icon: I, label, href, color }) => (
-                      <a
-                        key={label}
-                        href={href}
-                        aria-label={label}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={`grid h-9 w-9 place-items-center rounded-full text-white transition hover:scale-105 ${color}`}
-                      >
-                        <I />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-                <nav className="mt-6 flex flex-col gap-1">
-                  <Link to="/" className="rounded-xl px-3 py-2.5 font-semibold hover:bg-navy-border">
-                    Inicio
-                  </Link>
-                  {cats?.map((c) => (
-                    <Link
-                      key={c.id}
-                      to="/categoria/$slug"
-                      params={{ slug: c.slug }}
-                      className="rounded-xl px-3 py-2.5 font-semibold hover:bg-navy-border"
-                    >
-                      {c.name}
+                  <nav className="mt-6 flex flex-col gap-1">
+                    <Link to="/" className="rounded-xl px-3 py-2.5 font-semibold hover:bg-navy-border">
+                      Inicio
                     </Link>
-                  ))}
-                </nav>
-              </SheetContent>
-            </Sheet>
+                    {cats?.map((c) => (
+                      <Link
+                        key={c.id}
+                        to="/categoria/$slug"
+                        params={{ slug: c.slug }}
+                        className="rounded-xl px-3 py-2.5 font-semibold hover:bg-navy-border"
+                      >
+                        {c.name}
+                      </Link>
+                    ))}
+                  </nav>
+                </SheetContent>
+              </Sheet>
+            </div>
 
-            <Link to="/" aria-label="QAP ChacoNews, inicio" className="flex flex-1 justify-center">
-              <Logo className="h-9" />
-            </Link>
+            <div className="flex flex-1 justify-center">
+              <Link to="/" aria-label="QAP ChacoNews, inicio" className="inline-flex">
+                <Logo className="h-9" />
+              </Link>
+            </div>
 
             <div className="flex items-center gap-2">
               <ThemeToggle />
