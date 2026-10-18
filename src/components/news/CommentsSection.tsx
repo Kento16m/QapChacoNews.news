@@ -323,6 +323,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
         body: {
           article_id: articleId,
           parent_id: replyTo,
+          user_id: session.user.id,
           body: cleanBody,
         },
       });
