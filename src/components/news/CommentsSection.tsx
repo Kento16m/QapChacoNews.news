@@ -33,68 +33,113 @@ const sanitizeText = (value: string) =>
     ALLOWED_ATTR: [],
   }).trim();
 
+const offensiveContentMessage = "Tu comentario no es apto para esta comunidad. Por favor, elimina palabras ofensivas o contenido inapropiado y vuelve a intentarlo.";
+const rateLimitMessage = "Superaste el límite de mensajes. Por favor, esperá 1 minuto antes de comentar otra vez.";
+
+const isOffensiveContentMessage = (message: string) =>
+  /no es apto para esta comunidad|palabras ofensivas|contenido inapropiado|comentario fue bloqueado/i.test(message);
+
+const isRateLimitMessage = (message: string) =>
+  /límite|limite|espera 1 minuto|esperá 1 minuto|429|rate limit|too many requests/i.test(message);
+
+const parseJsonStringCandidate = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object") {
+      const message =
+        (parsed as Record<string, unknown>).error ??
+        (parsed as Record<string, unknown>).message ??
+        (parsed as Record<string, unknown>).detail ??
+        (parsed as Record<string, unknown>).details ??
+        null;
+
+      if (typeof message === "string" && message.trim()) {
+        return message.trim();
+      }
+    }
+  } catch {
+    // Ignore invalid JSON and fall back to the raw text.
+  }
+
+  return trimmed;
+};
+
 const normalizeErrorMessage = (error: unknown): string => {
   if (typeof error === "string") {
-    const text = error.trim();
-    return text || "No se pudo publicar el comentario.";
+    const raw = parseJsonStringCandidate(error) ?? error.trim();
+    if (isOffensiveContentMessage(raw)) return offensiveContentMessage;
+    if (isRateLimitMessage(raw)) return rateLimitMessage;
+    return raw || "No se pudo publicar el comentario.";
   }
 
   if (error instanceof Error) {
-    return error.message || "No se pudo publicar el comentario.";
+    const raw = parseJsonStringCandidate(error.message) ?? (error.message || "No se pudo publicar el comentario.");
+    if (isOffensiveContentMessage(raw)) return offensiveContentMessage;
+    if (isRateLimitMessage(raw)) return rateLimitMessage;
+    return raw;
   }
 
   if (error && typeof error === "object") {
     const details = error as Record<string, unknown>;
+    const statusCode = typeof details["status"] === "number" ? details["status"] : null;
     const context = details["context"];
 
-    if (context && typeof context === "object") {
-      const contextDetails = context as Record<string, unknown>;
-      const nestedContextMessage =
-        contextDetails["message"] ??
-        contextDetails["error"] ??
-        contextDetails["detail"] ??
-        contextDetails["details"] ??
-        contextDetails["hint"] ??
-        contextDetails["data"] ??
-        contextDetails["body"] ??
-        null;
+    if (statusCode === 429) {
+      return rateLimitMessage;
+    }
 
-      if (typeof nestedContextMessage === "string" && nestedContextMessage.trim()) {
-        return nestedContextMessage.trim();
+    const candidates: unknown[] = [
+      details["message"],
+      details["error"],
+      details["detail"],
+      details["details"],
+      details["hint"],
+      details["body"],
+      details["data"],
+      context,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === "string") {
+        const text = parseJsonStringCandidate(candidate) ?? candidate.trim();
+        if (!text) continue;
+        if (isOffensiveContentMessage(text)) return offensiveContentMessage;
+        if (isRateLimitMessage(text)) return rateLimitMessage;
+        return text;
       }
 
-      if (nestedContextMessage && typeof nestedContextMessage === "object") {
-        const inner = nestedContextMessage as Record<string, unknown>;
-        const innerMessage =
-          inner.message ??
-          inner.error ??
-          inner.detail ??
-          inner.details ??
-          inner.hint ??
-          JSON.stringify(inner);
+      if (candidate && typeof candidate === "object") {
+        const nested = candidate as Record<string, unknown>;
+        const nestedKeys = [
+          nested["message"],
+          nested["error"],
+          nested["detail"],
+          nested["details"],
+          nested["hint"],
+          nested["body"],
+          nested["data"],
+        ];
 
-        if (typeof innerMessage === "string" && innerMessage.trim()) {
-          return innerMessage.trim();
+        for (const nestedValue of nestedKeys) {
+          if (typeof nestedValue === "string") {
+            const text = parseJsonStringCandidate(nestedValue) ?? nestedValue.trim();
+            if (!text) continue;
+            if (isOffensiveContentMessage(text)) return offensiveContentMessage;
+            if (isRateLimitMessage(text)) return rateLimitMessage;
+            return text;
+          }
         }
       }
     }
 
-    const nestedMessage =
-      details["message"] ??
-      details["error"] ??
-      details["detail"] ??
-      details["details"] ??
-      details["context"] ??
-      details["hint"] ??
-      JSON.stringify(details);
-
-    if (typeof nestedMessage === "string" && nestedMessage.trim()) {
-      return nestedMessage.trim();
-    }
-
-    if (nestedMessage && typeof nestedMessage === "object") {
-      return JSON.stringify(nestedMessage);
-    }
+    const jsonText = JSON.stringify(details);
+    if (isOffensiveContentMessage(jsonText)) return offensiveContentMessage;
+    if (isRateLimitMessage(jsonText)) return rateLimitMessage;
   }
 
   return "No se pudo publicar el comentario.";
@@ -330,7 +375,15 @@ export function CommentsSection({ articleId }: { articleId: string }) {
 
       console.debug("Supabase function response:", { data, invokeError });
 
-      if (invokeError) {
+      const payloadError = data && typeof data === "object" && "error" in data ? (data as { error?: unknown }).error : undefined;
+      const payloadMessage = payloadError ? normalizeErrorMessage(payloadError) : normalizeErrorMessage(invokeError);
+
+      if (payloadError || invokeError) {
+        const statusCode =
+          typeof invokeError === "object" && invokeError !== null && "status" in invokeError
+            ? Number((invokeError as Record<string, unknown>).status)
+            : null;
+
         const authIssue =
           typeof invokeError === "object" &&
           invokeError !== null &&
@@ -338,21 +391,17 @@ export function CommentsSection({ articleId }: { articleId: string }) {
           typeof invokeError.message === "string" &&
           /jwt|unauthorized|401|token/i.test(invokeError.message);
 
-        const payloadMessage = normalizeErrorMessage(invokeError);
-        const friendlyMessage = authIssue
-          ? "La sesión de Supabase no es válida o expiró. Volvé a iniciar sesión e intentá nuevamente."
-          : payloadMessage === "Edge Function returned a non-2xx status code"
-            ? "Tu comentario no es apto para esta comunidad. Por favor, elimina palabras ofensivas o contenido inapropiado y vuelve a intentarlo."
-            : payloadMessage;
+        const friendlyMessage = statusCode === 429 || isRateLimitMessage(payloadMessage)
+          ? rateLimitMessage
+          : isOffensiveContentMessage(payloadMessage)
+            ? offensiveContentMessage
+            : authIssue
+              ? "La sesión de Supabase no es válida o expiró. Volvé a iniciar sesión e intentá nuevamente."
+              : payloadMessage === "Edge Function returned a non-2xx status code"
+                ? "No se pudo publicar el comentario. Intentalo nuevamente en unos segundos."
+                : payloadMessage;
 
         setError(friendlyMessage);
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (data && typeof data === "object" && "error" in data) {
-        const payloadError = (data as { error?: unknown }).error;
-        setError(normalizeErrorMessage(payloadError));
         setIsSubmitting(false);
         return;
       }

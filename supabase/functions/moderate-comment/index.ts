@@ -133,6 +133,53 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    const { data: canComment, error: rateError } = await supabase.rpc("can_user_comment", {
+      p_user_id: user_id,
+      p_limit: 5,
+      p_window_minutes: 1,
+    });
+
+    if (rateError) {
+      console.error("Error validando rate limit:", rateError);
+      return new Response(
+        JSON.stringify({ error: "No se pudo validar el límite de comentarios." }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    if (canComment === false) {
+      return new Response(
+        JSON.stringify({
+          error: "Superaste el límite de mensajes. Por favor, esperá 1 minuto antes de comentar otra vez.",
+        }),
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const { data: recorded, error: recordError } = await supabase.rpc("record_comment_attempt", {
+      p_user_id: user_id,
+      p_article_id: article_id,
+      p_limit: 5,
+      p_window_minutes: 1,
+    });
+
+    if (recordError) {
+      console.error("Error registrando intento de comentario:", recordError);
+      return new Response(
+        JSON.stringify({ error: "No se pudo registrar el intento de comentario." }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    if (recorded === false) {
+      return new Response(
+        JSON.stringify({
+          error: "Superaste el límite de mensajes. Por favor, esperá 1 minuto antes de comentar otra vez.",
+        }),
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     const { data, error } = await supabase
       .from("comments")
       .insert([
