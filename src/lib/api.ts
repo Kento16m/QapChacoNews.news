@@ -305,33 +305,46 @@ export const subscribeNewsletter = async (email: string): Promise<{ ok: true; em
 export const registerArticleView = async (articleId: string): Promise<void> => {
   const client = requireSupabaseClient();
 
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !articleId) return;
 
-  const sessionKey = "qap_article_view_session";
-  const browserSessionId = window.sessionStorage.getItem(sessionKey) ?? crypto.randomUUID();
-  window.sessionStorage.setItem(sessionKey, browserSessionId);
+  const sessionKey = `qap_article_view_session:${articleId}`;
+  const viewStorageKey = "qap_article_view_registry_v2";
+  const now = Date.now();
+  const ttlMs = 1000 * 60 * 60 * 12;
 
-  let userId: string | null = null;
   try {
-    const { data: sessionData } = await client.auth.getSession();
-    userId = sessionData.session?.user?.id ?? null;
+    if (window.sessionStorage.getItem(sessionKey) === "1") {
+      return;
+    }
+
+    const raw = window.localStorage.getItem(viewStorageKey);
+    const registry: Record<string, number> = raw ? JSON.parse(raw) : {};
+    const lastSeen = Number(registry[articleId] ?? 0);
+
+    if (lastSeen && now - lastSeen < ttlMs) {
+      window.sessionStorage.setItem(sessionKey, "1");
+      return;
+    }
+
+    registry[articleId] = now;
+    window.localStorage.setItem(viewStorageKey, JSON.stringify(registry));
+    window.sessionStorage.setItem(sessionKey, "1");
   } catch (error) {
-    console.warn("No se pudo resolver la sesión del usuario para registrar la vista.", error);
+    console.warn("No se pudo guardar la deduplicación local de la vista.", error);
+    return;
   }
 
-  const identitySessionId = userId ? `user:${userId}:${browserSessionId}` : `anon:${browserSessionId}`;
+  try {
+    const { error } = await client.rpc("incrementar_vista", { p_articulo_id: articleId });
+    if (!error) return;
 
-  const { error } = await client.from("article_views").insert({
-    article_id: articleId,
-    user_id: userId,
-    session_id: identitySessionId,
-    referrer: document.referrer || null,
-    user_agent: navigator.userAgent || null,
-    device_type: /Mobile|Android|iPhone|iPad/.test(navigator.userAgent) ? "mobile" : "desktop",
-  });
+    if (error.code === "PGRST301" || error.code === "42883") {
+      console.warn("RPC increment_vista no existe todavía; usando fallback local.");
+      return;
+    }
 
-  if (error) {
-    if (error.code === "23505") return;
-    console.error("No se pudo registrar la vista del artículo:", error);
+    console.error("No se pudo registrar la vista del artículo via RPC:", error);
+  } catch (error) {
+    console.warn("Fallback de vista no disponible; la vista quedará controlada solo por deduplicación local.", error);
   }
 };

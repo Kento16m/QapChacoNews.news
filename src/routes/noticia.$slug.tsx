@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import DOMPurify from "dompurify";
 import { ChevronRight, Clock, Eye, FileQuestion } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArticleCard } from "@/components/news/ArticleCard";
@@ -133,11 +133,16 @@ function Related({ article }: { article: Article }) {
 function ArticlePage() {
   const { slug } = Route.useParams();
   const { data: a, isLoading, isError } = useArticle(slug);
+  const trackedViewRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (a) {
       document.title = `${a.seo_title ?? a.title} — QAP ChacoNews`;
-      registerArticleView(a.id);
+
+      if (trackedViewRef.current !== a.id) {
+        trackedViewRef.current = a.id;
+        registerArticleView(a.id);
+      }
     } else if (!isLoading) {
       document.title = "Nota no encontrada — QAP ChacoNews";
     }
