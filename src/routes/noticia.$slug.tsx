@@ -48,6 +48,8 @@ function normalizeArticleContent(html: string) {
 
   const normalized = trimmed.replace(/\r\n/g, "\n");
   const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(normalized);
+  const hasInlineFormatting = /<\/?(?:strong|b|em|i|u|s|span|a|mark|code)>/i.test(normalized);
+  const hasBlockElement = /<\/?(?:p|div|h[1-6]|ul|ol|li|blockquote|figure|table|pre|section|article)>/i.test(normalized);
 
   if (!looksLikeHtml) {
     return normalized
@@ -66,13 +68,31 @@ function normalizeArticleContent(html: string) {
   if (blocks.length > 1) {
     return blocks
       .map((block) => {
-        const hasBlockElement = /<\/?(?:p|div|h[1-6]|ul|ol|li|blockquote|figure|table|pre|section|article)>/i.test(block);
+        const innerBlocks = block
+          .split(/\n+/)
+          .map((segment) => segment.trim())
+          .filter(Boolean);
+
+        if (innerBlocks.length > 1 && !hasBlockElement) {
+          return innerBlocks.map((segment) => `<p>${segment}</p>`).join("");
+        }
+
         return hasBlockElement ? block : `<p>${block.replace(/\n+/g, " ")}</p>`;
       })
       .join("");
   }
 
-  const hasBlockElement = /<\/?(?:p|div|h[1-6]|ul|ol|li|blockquote|figure|table|pre|section|article)>/i.test(normalized);
+  if (hasInlineFormatting && !hasBlockElement) {
+    const segments = normalized
+      .split(/\n+/)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    if (segments.length > 1) {
+      return segments.map((segment) => `<p>${segment}</p>`).join("");
+    }
+  }
+
   if (hasBlockElement) return normalized;
 
   return `<p>${normalized.replace(/\n+/g, " ")}</p>`;
