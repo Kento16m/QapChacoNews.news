@@ -45,18 +45,18 @@ const normalizeErrorMessage = (error: unknown): string => {
 
   if (error && typeof error === "object") {
     const details = error as Record<string, unknown>;
-    const context = details.context;
+    const context = details["context"];
 
     if (context && typeof context === "object") {
       const contextDetails = context as Record<string, unknown>;
       const nestedContextMessage =
-        contextDetails.message ??
-        contextDetails.error ??
-        contextDetails.detail ??
-        contextDetails.details ??
-        contextDetails.hint ??
-        contextDetails.data ??
-        contextDetails.body ??
+        contextDetails["message"] ??
+        contextDetails["error"] ??
+        contextDetails["detail"] ??
+        contextDetails["details"] ??
+        contextDetails["hint"] ??
+        contextDetails["data"] ??
+        contextDetails["body"] ??
         null;
 
       if (typeof nestedContextMessage === "string" && nestedContextMessage.trim()) {
@@ -80,12 +80,12 @@ const normalizeErrorMessage = (error: unknown): string => {
     }
 
     const nestedMessage =
-      details.message ??
-      details.error ??
-      details.detail ??
-      details.details ??
-      details.context ??
-      details.hint ??
+      details["message"] ??
+      details["error"] ??
+      details["detail"] ??
+      details["details"] ??
+      details["context"] ??
+      details["hint"] ??
       JSON.stringify(details);
 
     if (typeof nestedMessage === "string" && nestedMessage.trim()) {
@@ -100,6 +100,8 @@ const normalizeErrorMessage = (error: unknown): string => {
   return "No se pudo publicar el comentario.";
 };
 
+const PAGE_SIZE = 10;
+
 export function CommentsSection({ articleId }: { articleId: string }) {
   const { openAuthDialog } = useAuth();
   const [session, setSession] = useState<any>(null);
@@ -109,6 +111,9 @@ export function CommentsSection({ articleId }: { articleId: string }) {
   const [replyTo, setReplyTo] = useState<number | null>(null);
   const [replyTargetName, setReplyTargetName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [animatedLikes, setAnimatedLikes] = useState<Record<number, boolean>>({});
@@ -146,26 +151,38 @@ export function CommentsSection({ articleId }: { articleId: string }) {
   useEffect(() => {
     if (!supabase || !articleId) return;
 
-    const fetchComments = async () => {
-      setLoading(true);
+    const fetchComments = async (pageIndex = 0, append = false) => {
+      if (pageIndex === 0) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const from = pageIndex * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
       const { data, error: fetchError } = await supabase
         .from("comments")
         .select("*")
         .eq("article_id", articleId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
-      if (!fetchError) {
-        const nextComments = (data as CommentRecord[]) ?? [];
-        setComments(nextComments);
+      if (fetchError) {
+        setError("No se pudieron cargar los comentarios.");
+        setLoading(false);
+        setLoadingMore(false);
+        return;
+      }
 
-        const uniqueUserIds = [...new Set(nextComments.map((comment) => comment.user_id))];
+      const nextComments = (data as CommentRecord[]) ?? [];
 
-        if (uniqueUserIds.length === 0) {
-          setProfiles({});
-          setLoading(false);
-          return;
-        }
+      setComments((current) => (append ? [...current, ...nextComments] : nextComments));
+      setHasMore(nextComments.length === PAGE_SIZE);
 
+      const uniqueUserIds = [...new Set(nextComments.map((comment) => comment.user_id))];
+
+      if (uniqueUserIds.length > 0) {
         const { data: profileRows, error: profileError } = await supabase
           .from("profiles")
           .select("id, full_name, avatar_url, profile_color")
@@ -181,14 +198,25 @@ export function CommentsSection({ articleId }: { articleId: string }) {
             };
             return acc;
           }, {});
-          setProfiles(nextProfiles);
+          setProfiles((current) => ({ ...current, ...nextProfiles }));
         }
       }
 
+      if (pageIndex === 0) {
+        setProfiles((current) => {
+          const next = { ...current };
+          Object.keys(next).forEach((key) => {
+            if (!uniqueUserIds.includes(key)) delete next[key];
+          });
+          return next;
+        });
+      }
+
       setLoading(false);
+      setLoadingMore(false);
     };
 
-    fetchComments();
+    fetchComments(0, false);
 
     const commentsChannel = supabase.channel(`comments-${articleId}`);
     commentsChannel
@@ -200,7 +228,11 @@ export function CommentsSection({ articleId }: { articleId: string }) {
           table: "comments",
           filter: `article_id=eq.${articleId}`,
         },
-        () => fetchComments()
+        () => {
+          setPage(0);
+          setComments([]);
+          fetchComments(0, false);
+        }
       )
       .subscribe();
 
@@ -213,7 +245,11 @@ export function CommentsSection({ articleId }: { articleId: string }) {
           schema: "public",
           table: "comment_likes",
         },
-        () => fetchComments()
+        () => {
+          setPage(0);
+          setComments([]);
+          fetchComments(0, false);
+        }
       )
       .subscribe();
 
@@ -287,7 +323,6 @@ export function CommentsSection({ articleId }: { articleId: string }) {
         body: {
           article_id: articleId,
           parent_id: replyTo,
-          user_id: session.user.id,
           body: cleanBody,
         },
       });
@@ -334,11 +369,13 @@ export function CommentsSection({ articleId }: { articleId: string }) {
           const existing = current.some((item) => item.id === insertedComment.id);
           if (existing) return current;
           const next = [insertedComment, ...current];
-          return next;
+          return next.slice(0, PAGE_SIZE);
         });
         setHighlightedCommentId(insertedComment.id);
       }
 
+      setPage(0);
+      setHasMore(true);
       setDraft("");
       setReplyTo(null);
       setReplyTargetName("");
@@ -508,6 +545,43 @@ export function CommentsSection({ articleId }: { articleId: string }) {
               isSubmitting={isSubmitting}
             />
           ))}
+
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  const nextPage = page + 1;
+                  setPage(nextPage);
+                  setLoadingMore(true);
+                  const from = nextPage * PAGE_SIZE;
+                  const to = from + PAGE_SIZE - 1;
+
+                  const { data, error: fetchError } = await supabase
+                    .from("comments")
+                    .select("*")
+                    .eq("article_id", articleId)
+                    .order("created_at", { ascending: false })
+                    .range(from, to);
+
+                  if (fetchError) {
+                    setError("No se pudieron cargar más comentarios.");
+                    setLoadingMore(false);
+                    return;
+                  }
+
+                  const more = (data as CommentRecord[]) ?? [];
+                  setComments((current) => [...current, ...more]);
+                  setHasMore(more.length === PAGE_SIZE);
+                  setLoadingMore(false);
+                }}
+                disabled={loadingMore}
+              >
+                {loadingMore ? "Cargando..." : "Cargar más"}
+              </Button>
+            </div>
+          )}
         </div>
       )}
       </section>
