@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
     }
 
     const blockedWordPattern =
-      /(\b(?:puta|puto|culo|gil|gila|idiota|imbecil|nazi|matar|asesinar|violencia|mierda|mierd[ae]|cabr[oó]|hijo de puta|bastardo|pendejo|pendeja|retrasado|retrasada|mongol|mamon|perra|perro|maldito|maldita|pesado|desgraciado|cagada)\b)/i;
+      /(\b(?:puta|puto|culo|gil|gila|idiota|imbecil|nazi|hijo de puta|bastardo|pendejo|pendeja|perra|perro|maldito|maldita)\b)/i;
 
     if (blockedWordPattern.test(normalized)) {
       return new Response(
@@ -91,16 +91,6 @@ Deno.serve(async (req) => {
     }
 
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openAiKey) {
-      return new Response(
-        JSON.stringify({ error: "La moderación no está configurada en el servidor." }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
-      );
-    }
-
     const moderationModels = [
       "omni-moderation-latest",
       "text-moderation-latest",
@@ -111,64 +101,59 @@ Deno.serve(async (req) => {
     let moderationData = null;
     let lastError = null;
 
-    for (const model of moderationModels) {
-      moderationResponse = await fetch("https://api.openai.com/v1/moderations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openAiKey}`,
-        },
-        body: JSON.stringify({ input: normalized, model }),
-      });
+    if (openAiKey) {
+      for (const model of moderationModels) {
+        moderationResponse = await fetch("https://api.openai.com/v1/moderations", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${openAiKey}`,
+          },
+          body: JSON.stringify({ input: normalized, model }),
+        });
 
-      moderationData = await moderationResponse.json().catch(() => null);
+        moderationData = await moderationResponse.json().catch(() => null);
 
-      if (moderationResponse.ok) {
-        break;
-      }
-
-      lastError = moderationData;
-      const message = moderationData?.error?.message ?? "";
-      const isUnsupportedModel =
-        (message || "").toLowerCase().includes("model") || moderationResponse.status === 400;
-
-      if (!isUnsupportedModel) {
-        break;
-      }
-    }
-
-    if (!moderationResponse || !moderationResponse.ok) {
-      console.error("OpenAI moderation failed:", lastError ?? moderationData);
-      return new Response(
-        JSON.stringify({ error: "La moderación falló temporalmente. Inténtalo nuevamente." }),
-        {
-          status: 502,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
+        if (moderationResponse.ok) {
+          break;
         }
-      );
+
+        lastError = moderationData;
+        const message = moderationData?.error?.message ?? "";
+        const isUnsupportedModel =
+          (message || "").toLowerCase().includes("model") || moderationResponse.status === 400;
+
+        if (!isUnsupportedModel) {
+          break;
+        }
+      }
     }
 
     const result = moderationData?.results?.[0];
-    if (!result) {
-      return new Response(
-        JSON.stringify({ error: "La respuesta de moderación fue inválida." }),
-        {
-          status: 502,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
-      );
+    if (moderationResponse && !moderationResponse.ok) {
+      console.error("OpenAI moderation failed:", lastError ?? moderationData);
     }
 
-    if (result.flagged) {
-      return new Response(
-        JSON.stringify({
-          error: "Tu comentario fue bloqueado por la moderación por contener contenido inapropiado, odio o spam.",
-        }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
+    if (result && result.flagged) {
+      const flaggedCategories = Object.entries(result.categories ?? {})
+        .filter(([, value]) => Boolean(value))
+        .map(([key]) => key);
+
+      const highRisk = flaggedCategories.filter((key) =>
+        ["hate", "violence", "self-harm", "sexual", "harassment"].includes(key)
       );
+
+      if (highRisk.length > 0) {
+        return new Response(
+          JSON.stringify({
+            error: "Tu comentario fue bloqueado por la moderación por contener contenido inapropiado, odio o spam.",
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+          }
+        );
+      }
     }
 
     const bearerToken = getBearerToken(req);
