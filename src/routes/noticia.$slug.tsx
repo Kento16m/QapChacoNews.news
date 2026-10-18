@@ -200,9 +200,14 @@ function ArticlePage() {
           </div>
         </header>
 
-        <figure className="reveal mx-auto mt-10 w-full max-w-[1200px]">
-          <div className="aspect-[16/9] overflow-hidden rounded-[28px] bg-transparent shadow-soft md:aspect-[21/9]">
-            <CoverImage src={a.cover_image_url} alt={a.title} className="bg-transparent" />
+        <figure className="reveal mx-auto mt-10 w-full max-w-4xl">
+          <div className="w-full overflow-hidden rounded-[28px] bg-transparent shadow-soft">
+            <CoverImage
+              src={a.cover_image_url}
+              alt={a.title}
+              fit="contain"
+              className="mx-auto h-auto max-w-full w-auto rounded-2xl bg-transparent object-contain"
+            />
           </div>
           {a.excerpt && <figcaption className="mt-4 text-sm text-muted-foreground">{a.excerpt}</figcaption>}
         </figure>
