@@ -228,23 +228,23 @@ export function CurrencyTicker({ className = "" }: { className?: string }) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Ver cotización de monedas"
-        className={`group inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-left text-[10px] text-navy-foreground transition-all duration-300 hover:border-white/20 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-primary/80 sm:gap-2.5 sm:px-3 sm:py-2 sm:text-xs ${className}`}
+        className={`group inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-slate-800/70 px-2 py-1.5 text-left text-[10px] text-slate-100 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] transition-all duration-300 hover:border-white/20 hover:bg-slate-700/70 focus:outline-none focus:ring-2 focus:ring-primary/80 sm:gap-2 sm:px-2.5 sm:py-1.5 sm:text-xs ${className}`}
       >
         {loading ? (
-          <span className="flex items-center gap-2 text-muted-foreground">
-            <span className="h-3.5 w-3.5 animate-pulse rounded-full bg-white/20" />
-            <span className="font-medium text-foreground">Cotización…</span>
+          <span className="flex items-center gap-1.5 text-slate-200">
+            <span className="h-3 w-3 animate-pulse rounded-full bg-white/20" />
+            <span className="font-medium">Cotización…</span>
           </span>
         ) : error ? (
-          <span className="flex items-center gap-2 text-amber-200">
-            <span className="text-base">💱</span>
+          <span className="flex items-center gap-1.5 text-slate-200">
+            <span className="text-sm">💱</span>
             <span className="font-medium">Monedas</span>
           </span>
         ) : (
-          <span className="flex items-center gap-2 text-navy-foreground transition-all duration-500">
+          <span className="flex items-center gap-1.5 text-slate-100 transition-all duration-500">
             <CountryFlag className={current.flagClass} label={current.name} />
-            <span className="font-semibold">{current.code}</span>
-            <span className="font-medium text-primary">₲ {formatPyg(currentValue)}</span>
+            <span className="font-semibold tracking-wide">{current.code}</span>
+            <span className="font-medium text-slate-300">₲ {formatPyg(currentValue)}</span>
           </span>
         )}
       </button>
@@ -360,7 +360,7 @@ function WeatherSkeleton({ className = "" }: { className?: string }) {
   );
 }
 
-function WeatherQuickView({ onOpen }: { onOpen: () => void }) {
+function WeatherQuickView({ onOpen, className = "" }: { onOpen: () => void; className?: string }) {
   const [weather, setWeather] = useState<WeatherCurrent | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -394,24 +394,22 @@ function WeatherQuickView({ onOpen }: { onOpen: () => void }) {
       type="button"
       onClick={onOpen}
       aria-label="Ver pronóstico del clima"
-      className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900 px-2.5 py-1.5 text-left text-[10px] text-white shadow-sm ring-1 ring-white/10 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/80 sm:gap-2.5 sm:px-3 sm:py-2 sm:text-xs"
+      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-slate-800/70 px-2 py-1.5 text-left text-[10px] text-slate-100 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] transition hover:bg-slate-700/70 focus:outline-none focus:ring-2 focus:ring-primary/80 sm:gap-2 sm:px-2.5 sm:py-1.5 sm:text-xs ${className}`}
     >
       {loading ? (
         <WeatherSkeleton />
       ) : weather?.icon ? (
-        <div className="grid place-items-center rounded-full bg-white/10 p-1 ring-1 ring-white/15">
-          <img
-            src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
-            alt={weather.description}
-            className="h-6 w-6 object-contain sm:h-7 sm:w-7"
-            style={{ filter: "brightness(1.15) contrast(1.15)" }}
-          />
-        </div>
+        <img
+          src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
+          alt={weather.description}
+          className="h-5 w-5 object-contain sm:h-6 sm:w-6"
+          style={{ filter: "brightness(1.15) contrast(1.15)" }}
+        />
       ) : (
-        <CloudSun className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
+        <CloudSun className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
       )}
 
-      <span className="inline-flex items-center gap-1.5 font-semibold text-white">
+      <span className="inline-flex items-center gap-1 font-semibold text-slate-100">
         <MapPin className="h-3 w-3 opacity-80 sm:h-3.5 sm:w-3.5" />
         <span>{error ? "Clima" : `${Math.round(weather?.temperature ?? 0)}°C`}</span>
       </span>
@@ -457,7 +455,7 @@ function WeatherForecastModal() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <WeatherQuickView onOpen={() => setOpen(true)} />
+      <WeatherQuickView onOpen={() => setOpen(true)} className="bg-slate-800/70" />
       <DialogContent className="max-h-[92vh] w-[calc(100%-1.25rem)] max-w-2xl overflow-y-auto rounded-3xl border-0 bg-background p-0 shadow-2xl sm:w-full">
         <div className="border-b p-5">
           <DialogHeader className="space-y-1 text-left">
@@ -771,6 +769,21 @@ export function SiteHeader() {
   const today = useToday();
   const { data: cats } = useCategories();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const goHome = () => {
+    setMobileMenuOpen(false);
+
+    if (typeof window !== "undefined") {
+      if (window.location.pathname !== "/") {
+        window.location.assign("/");
+        return;
+      }
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+
+    navigate({ to: "/" });
+  };
 
   return (
     <>
@@ -803,13 +816,14 @@ export function SiteHeader() {
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
           <div className="hidden md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center md:gap-4">
             <div className="flex items-center gap-2">
-              <Link
-                to="/"
+              <button
+                type="button"
+                onClick={goHome}
                 aria-label="QAP ChacoNews, inicio"
                 className="inline-flex rounded-xl bg-navy px-3 py-1.5"
               >
                 <Logo className="h-9" />
-              </Link>
+              </button>
             </div>
 
             <SearchBox className="mx-auto w-full max-w-md" />
@@ -836,14 +850,13 @@ export function SiteHeader() {
                   <Logo className="h-12" />
                   <DrawerAuth />
                   <SearchBox className="mt-6 text-foreground" onOpenMobileSearch={() => setMobileMenuOpen(false)} />
-                  <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-navy-muted">
-                      Acciones rápidas
-                    </p>
-                    <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 p-2">
-                      <CurrencyTicker />
+                  <div className="mt-6 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <CurrencyTicker className="flex-1 justify-center border border-white/10 bg-slate-800/70 text-slate-100 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]" />
+                      <WeatherForecastModal />
                     </div>
-                    <div className="mt-3 flex items-center gap-3 pt-1">
+
+                    <div className="flex items-center justify-start gap-3 pt-1">
                       {socials.map(({ icon: I, label, href, color }) => (
                         <a
                           key={label}
@@ -859,9 +872,13 @@ export function SiteHeader() {
                     </div>
                   </div>
                   <nav className="mt-6 flex flex-col gap-1">
-                    <Link to="/" className="rounded-xl px-3 py-2.5 font-semibold hover:bg-navy-border">
+                    <button
+                      type="button"
+                      onClick={goHome}
+                      className="rounded-xl px-3 py-2.5 text-left font-semibold hover:bg-navy-border"
+                    >
                       Inicio
-                    </Link>
+                    </button>
                     {cats?.map((c) => (
                       <Link
                         key={c.id}
@@ -878,9 +895,9 @@ export function SiteHeader() {
             </div>
 
             <div className="flex flex-1 justify-start">
-              <Link to="/" aria-label="QAP ChacoNews, inicio" className="inline-flex">
+              <button type="button" onClick={goHome} aria-label="QAP ChacoNews, inicio" className="inline-flex">
                 <Logo className="h-9" />
-              </Link>
+              </button>
             </div>
 
             <div className="flex items-center gap-2">
@@ -894,13 +911,13 @@ export function SiteHeader() {
           aria-label="Categorías"
           className="mx-auto hidden max-w-7xl items-center gap-1 overflow-x-auto px-4 pb-2 sm:px-6 lg:flex"
         >
-          <Link
-            to="/"
-            activeOptions={{ exact: true }}
+          <button
+            type="button"
+            onClick={goHome}
             className="rounded-full px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground data-[status=active]:bg-primary data-[status=active]:text-primary-foreground"
           >
             Inicio
-          </Link>
+          </button>
           {cats?.map((c) => (
             <Link
               key={c.id}
