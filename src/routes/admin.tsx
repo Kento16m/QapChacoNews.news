@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { FileImage, ImageUp, LayoutDashboard, Mail, Newspaper, PlusCircle, Save, Sparkles, Users } from "lucide-react";
+import { Download, FileImage, ImageUp, LayoutDashboard, Mail, Monitor, Newspaper, PlusCircle, Printer, Save, ShieldCheck, Smartphone, Sparkles, Tablet, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useCategories } from "@/hooks/use-news";
 import { isAdminHostAllowed } from "@/lib/admin-access";
+import { isProtectedAdminEmail } from "@/lib/admin";
 import { getProfileColor } from "@/lib/profile-colors";
 import { requireSupabaseClient } from "@/lib/supabase";
 import { CurrencyTicker } from "@/components/news/SiteHeader";
@@ -16,9 +17,11 @@ import {
   createTag,
   deleteArticle,
   deleteCategory,
+  deleteAdminAccessLogs,
   deleteCommentForAdmin,
   deleteTag,
   getAdminArticles,
+  getAdminAccessLogs,
   getArticleCommentsForAdmin,
   getArticleTagIds,
   syncArticleTags,
@@ -27,6 +30,8 @@ import {
   getAdminCategories,
   getAdminTags,
   getAdminNewsletterSubscribers,
+  recordAdminAccessLog,
+  updateUserAccess,
   updateArticle,
   updateCategory,
   updateTag,
@@ -35,9 +40,14 @@ import {
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async () => {
-    if (typeof window === "undefined" || !isAdminHostAllowed(window.location.hostname)) {
-      throw notFound();
+    if (typeof window === "undefined") {
+      return;
     }
+
+    const hostname = window.location.hostname;
+    const isLocalDevAccess =
+      (import.meta.env.DEV && ["localhost", "127.0.0.1", "0.0.0.0"].includes(hostname)) ||
+      hostname.endsWith(".localhost");
 
     const client = requireSupabaseClient();
     const {
@@ -46,16 +56,26 @@ export const Route = createFileRoute("/admin")({
     } = await client.auth.getSession();
 
     if (error || !session?.user) {
-      throw notFound();
+      if (!isLocalDevAccess && !isAdminHostAllowed(hostname)) {
+        throw notFound();
+      }
+      return;
     }
 
-    const { data: profile, error: profileError } = await client
+    const { data: profile } = await client
       .from("profiles")
       .select("role")
       .eq("id", session.user.id)
       .maybeSingle();
 
-    if (profileError || !profile || (profile.role !== "admin" && profile.role !== "editor")) {
+    const isProtectedMasterAdmin = isProtectedAdminEmail(session.user.email);
+    const hasAdminAccess = profile?.role === "admin" || profile?.role === "editor" || isProtectedMasterAdmin;
+
+    if (hasAdminAccess) {
+      return;
+    }
+
+    if (!isLocalDevAccess && !isAdminHostAllowed(hostname)) {
       throw notFound();
     }
   },
@@ -156,6 +176,88 @@ const getInitials = (name: string | null | undefined) =>
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("") || "U";
 
+const formatAccessStatus = (status: string | null | undefined) => {
+  const normalized = (status ?? "").toLowerCase();
+
+  if (normalized === "success" || normalized === "ok" || normalized === "successful") return "Exitoso";
+  if (normalized === "failure" || normalized === "failed" || normalized === "error") return "Fallido";
+  if (normalized === "pending") return "Pendiente";
+
+  return status ? status : "Desconocido";
+};
+
+const getDeviceTypeFromUserAgent = (userAgent?: string | null) => {
+  if (!userAgent) return "Desktop";
+
+  if (/android|iphone|ipad|ipod|mobile/i.test(userAgent)) {
+    if (/ipad|tablet/i.test(userAgent)) return "Tablet";
+    return "Mobile";
+  }
+
+  if (/tablet|playbook|silk/i.test(userAgent)) return "Tablet";
+
+  return "Desktop";
+};
+
+const getDeviceIconForType = (deviceType: string) => {
+  switch (deviceType) {
+    case "Mobile":
+      return Smartphone;
+    case "Tablet":
+      return Tablet;
+    default:
+      return Monitor;
+  }
+};
+
+const resolveAccessIpFallback = (ipAddress: string | null | undefined, userId?: string | null) => {
+  if (ipAddress) return ipAddress;
+
+  if (typeof document !== "undefined") {
+    const referrer = document.referrer || "";
+    if (referrer) return `referrer:${referrer}`;
+  }
+
+  if (userId) return `auth:${userId.slice(0, 8)}`;
+
+  return "No disponible";
+};
+
+const matchesAccessDateRange = (value: string | null | undefined, range: "all" | "today" | "yesterday" | "last7" | "last30" | "thisMonth") => {
+  if (!value || range === "all") return true;
+
+  const date = new Date(value);
+  const now = new Date();
+  const toStartOfDay = (nextDate: Date) => {
+    const copy = new Date(nextDate);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+  };
+
+  const todayStart = toStartOfDay(now);
+  const yesterdayStart = new Date(todayStart);
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  switch (range) {
+    case "today":
+      return date >= todayStart;
+    case "yesterday": {
+      const yesterdayEnd = new Date(todayStart);
+      yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
+      return date >= toStartOfDay(yesterdayEnd) && date < todayStart;
+    }
+    case "last7":
+      return date >= new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+    case "last30":
+      return date >= new Date(todayStart.getTime() - 29 * 24 * 60 * 60 * 1000);
+    case "thisMonth":
+      return date >= currentMonthStart;
+    default:
+      return true;
+  }
+};
+
 function RichTextToolbar({ onFormat }: { onFormat: (format: "bold" | "italic") => void }) {
   const buttons = [
     { key: "bold", label: "B", title: "Negrita" },
@@ -215,11 +317,39 @@ function UserAvatar({
 }
 
 function AdminPage() {
-  const { profile, loading, user } = useAuth();
+  const { profile, loading, user, signOut } = useAuth();
   const queryClient = useQueryClient();
   const { data: categories = [] } = useCategories();
 
-  const canAccess = Boolean(user && profile && (profile.role === "admin" || profile.role === "editor"));
+  const blockedAccountMessage = profile?.is_blocked ? (profile.blocked_reason?.trim() || "Tu cuenta fue suspendida por el administrador.") : null;
+
+  if (blockedAccountMessage) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-xl items-center justify-center px-4 py-12">
+        <div className="w-full rounded-[28px] border border-red-200 bg-red-50 p-6 shadow-[0_18px_44px_rgba(127,29,29,0.12)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-red-600">Acceso restringido</p>
+          <h1 className="mt-3 text-3xl font-black text-red-900">Usuario suspendido</h1>
+          <p className="mt-4 text-base leading-7 text-red-800">{blockedAccountMessage}</p>
+          <button
+            type="button"
+            onClick={async () => {
+              await signOut();
+              window.location.href = "/";
+            }}
+            className="mt-6 inline-flex items-center rounded-full bg-red-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-red-500"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isMasterAdmin = isProtectedAdminEmail(user?.email);
+  const canAccess = Boolean(user && (profile?.role === "admin" || profile?.role === "editor" || isMasterAdmin));
+  const isAdminUser = Boolean(profile?.role === "admin" || isMasterAdmin);
+  const isEditorUser = profile?.role === "editor";
+  const canDeleteAccessLogs = isMasterAdmin;
 
   const { data: articles = [], isLoading, error } = useQuery({
     queryKey: ["admin", "articles"],
@@ -251,6 +381,12 @@ function AdminPage() {
     enabled: canAccess,
   });
 
+  const { data: adminAccessLogs = [] } = useQuery({
+    queryKey: ["admin", "access-logs"],
+    queryFn: getAdminAccessLogs,
+    enabled: canAccess && isAdminUser,
+  });
+
   const { data: adminCommentSummary = [] } = useQuery({
     queryKey: ["admin", "comments-summary"],
     queryFn: async () => {
@@ -267,9 +403,7 @@ function AdminPage() {
     enabled: canAccess,
   });
 
-  const isAdminUser = profile?.role === "admin";
-  const isEditorUser = profile?.role === "editor";
-  const [activeTab, setActiveTab] = useState<"overview" | "articles" | "new" | "management" | "general" | "categories" | "tags" | "authors" | "users" | "newsletter">(() => (isEditorUser ? "new" : "overview"));
+  const [activeTab, setActiveTab] = useState<"overview" | "articles" | "new" | "management" | "general" | "categories" | "tags" | "authors" | "users" | "newsletter" | "access-control">(() => (isEditorUser ? "new" : "overview"));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [managementArticleId, setManagementArticleId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -277,6 +411,16 @@ function AdminPage() {
   const [authorSearchTerm, setAuthorSearchTerm] = useState("");
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [newsletterSearchTerm, setNewsletterSearchTerm] = useState("");
+  const [accessSearchTerm, setAccessSearchTerm] = useState("");
+  const [accessStatusFilter, setAccessStatusFilter] = useState<"all" | "success" | "failure">("all");
+  const [accessRoleFilter, setAccessRoleFilter] = useState<"all" | string>("all");
+  const [accessDateFilter, setAccessDateFilter] = useState<"all" | "today" | "yesterday" | "last7" | "last30" | "thisMonth">("all");
+  const [accessVisibleCount, setAccessVisibleCount] = useState(10);
+  const [selectedAccessLogId, setSelectedAccessLogId] = useState<number | null>(null);
+  const [accessBanReason, setAccessBanReason] = useState("");
+  const [accessBanCloseSessions, setAccessBanCloseSessions] = useState(true);
+  const [showAccessBanModal, setShowAccessBanModal] = useState(false);
+  const [showDeleteAccessLogsModal, setShowDeleteAccessLogsModal] = useState(false);
   const [form, setForm] = useState<EditorForm>(emptyForm());
   const [categoryForm, setCategoryForm] = useState({ name: "", slug: "", color: "#E33A2E", sort_order: 0 });
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
@@ -379,6 +523,47 @@ function AdminPage() {
     });
   }, [newsletterSubscribers, newsletterSearchTerm]);
 
+  const filteredAccessLogs = useMemo(() => {
+    const normalizedQuery = accessSearchTerm.trim().toLowerCase();
+
+    return [...adminAccessLogs].filter((log) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        [log.full_name, log.email, log.role, log.page_url, log.browser, log.operating_system, log.ip_address, log.status, formatAccessStatus(log.status)]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery);
+
+      const matchesStatus = accessStatusFilter === "all" || log.status === accessStatusFilter;
+      const matchesRole = accessRoleFilter === "all" || log.role === accessRoleFilter;
+      const matchesDate = matchesAccessDateRange(log.accessed_at, accessDateFilter);
+
+      return matchesQuery && matchesStatus && matchesRole && matchesDate;
+    });
+  }, [accessDateFilter, accessRoleFilter, accessSearchTerm, accessStatusFilter, adminAccessLogs]);
+
+  const visibleAccessLogs = useMemo(() => filteredAccessLogs.slice(0, accessVisibleCount), [accessVisibleCount, filteredAccessLogs]);
+  const hasMoreAccessLogs = accessVisibleCount < filteredAccessLogs.length;
+
+  const accessLogSummary = useMemo(() => {
+    const total = adminAccessLogs.length;
+    const success = adminAccessLogs.filter((log) => log.status === "success").length;
+    const failure = adminAccessLogs.filter((log) => log.status === "failure").length;
+    const last7Days = adminAccessLogs.filter((log) => {
+      const accessedAt = new Date(log.accessed_at).getTime();
+      const diffInDays = (Date.now() - accessedAt) / 86400000;
+      return diffInDays <= 7;
+    }).length;
+
+    return { total, success, failure, last7Days };
+  }, [adminAccessLogs]);
+
+  const selectedAccessLog = useMemo(
+    () => (selectedAccessLogId !== null ? adminAccessLogs.find((log) => log.id === selectedAccessLogId) ?? null : adminAccessLogs[0] ?? null),
+    [adminAccessLogs, selectedAccessLogId]
+  );
+
   const { data: articleComments = [], isLoading: articleCommentsLoading } = useQuery({
     queryKey: ["admin", "article-comments", managementArticleId],
     queryFn: () => getArticleCommentsForAdmin(managementArticleId!),
@@ -466,6 +651,245 @@ function AdminPage() {
     }
   }, [managementArticleId, selectedId]);
 
+  const accessLogMutationRef = useRef(false);
+  useEffect(() => {
+    if (!canAccess || !user || accessLogMutationRef.current) {
+      return;
+    }
+
+    accessLogMutationRef.current = true;
+    void recordAdminAccessLog({
+      user_id: user.id,
+      email: user.email ?? profile?.email ?? null,
+      full_name: profile?.full_name ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
+      role: profile?.role ?? null,
+      user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      browser: typeof navigator !== "undefined" ? (navigator.userAgent.includes("Edg") ? "Edge" : navigator.userAgent.includes("Chrome") ? "Chrome" : navigator.userAgent.includes("Firefox") ? "Firefox" : "Browser") : null,
+      operating_system: typeof navigator !== "undefined" ? (navigator.userAgent.includes("Windows") ? "Windows" : navigator.userAgent.includes("Mac") ? "macOS" : navigator.userAgent.includes("Android") ? "Android" : navigator.userAgent.includes("Linux") ? "Linux" : null) : null,
+      language: typeof navigator !== "undefined" ? navigator.language : null,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? null,
+      referrer: typeof document !== "undefined" ? document.referrer || null : null,
+      page_url: typeof window !== "undefined" ? window.location.href : null,
+      session_id: user.id ?? null,
+      ip_address: resolveAccessIpFallback(null, user.id),
+      status: "success",
+      event_type: "admin_panel_access",
+    });
+  }, [canAccess, profile, user]);
+
+  const accessDateOptions: Array<{ key: "all" | "today" | "yesterday" | "last7" | "last30" | "thisMonth"; label: string }> = [
+    { key: "all", label: "Todos" },
+    { key: "today", label: "Hoy" },
+    { key: "yesterday", label: "Ayer" },
+    { key: "last7", label: "Últimos 7 Días" },
+    { key: "last30", label: "Últimos 30 Días" },
+    { key: "thisMonth", label: "Este Mes" },
+  ];
+
+  const exportAccessLogsCsv = () => {
+    const rows = filteredAccessLogs.map((log) => [
+      log.full_name ?? "",
+      log.email ?? "",
+      log.role ?? "",
+      formatAccessStatus(log.status),
+      resolveAccessIpFallback(log.ip_address, log.user_id),
+      log.page_url ?? "",
+      log.browser ?? "",
+      getDeviceTypeFromUserAgent(log.user_agent),
+      new Date(log.accessed_at).toLocaleString("es-AR"),
+    ]);
+
+    const header = ["Usuario", "Email", "Rol", "Estado", "IP", "Host", "Navegador", "Dispositivo", "Fecha"];
+    const csv = [header, ...rows]
+      .map((line) =>
+        line
+          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "control-acceso.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportAccessLogsPdf = () => {
+    if (typeof window === "undefined") return;
+
+    const html = `
+      <html>
+        <head>
+          <title>Control de Acceso</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; font-size: 12px; text-align: left; }
+            th { background: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h2>Control de Acceso</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th>IP</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredAccessLogs
+                .map(
+                  (log) => `
+                    <tr>
+                      <td>${(log.full_name ?? "Sin nombre").replace(/</g, "&lt;")}</td>
+                      <td>${(log.email ?? "").replace(/</g, "&lt;")}</td>
+                      <td>${(log.role ?? "").replace(/</g, "&lt;")}</td>
+                      <td>${formatAccessStatus(log.status)}</td>
+                      <td>${resolveAccessIpFallback(log.ip_address, log.user_id).replace(/</g, "&lt;")}</td>
+                      <td>${new Date(log.accessed_at).toLocaleString("es-AR")}</td>
+                    </tr>
+                  `
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank", "noopener,noreferrer");
+    if (!printWindow) {
+      window.alert("El navegador bloqueó la impresión del PDF.");
+      return;
+    }
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
+  };
+
+  const targetUserAccess = useMemo(() => {
+    if (!selectedAccessLog?.user_id) {
+      return null;
+    }
+
+    return authors.find((author) => author.id === selectedAccessLog.user_id) ?? null;
+  }, [authors, selectedAccessLog?.user_id]);
+
+  const canBanSelectedUser = Boolean(
+    selectedAccessLog &&
+      selectedAccessLog.user_id !== user?.id &&
+      !isProtectedAdminEmail(selectedAccessLog.email ?? null)
+  );
+
+  const handleToggleUserBan = async () => {
+    if (!selectedAccessLog?.user_id) {
+      return;
+    }
+
+    const isBlocked = Boolean(targetUserAccess?.is_blocked);
+    const targetEmail = (selectedAccessLog.email ?? "").trim().toLowerCase();
+    const targetRole = targetUserAccess?.role ?? "reader";
+
+    if (selectedAccessLog.user_id === user?.id) {
+      window.alert("No podés bloquearte a vos mismo desde el panel de administración.");
+      return;
+    }
+
+    if (isProtectedAdminEmail(targetEmail)) {
+      window.alert("Este usuario está protegido y no puede ser bloqueado desde el panel.");
+      return;
+    }
+
+    try {
+      const nextReason = isBlocked ? null : accessBanReason.trim() || "Suspendido por administración";
+      const updated = await updateUserAccess(selectedAccessLog.user_id, {
+        is_blocked: !isBlocked,
+        blocked_reason: nextReason,
+      });
+
+      queryClient.setQueryData(["admin", "authors"], (previous: typeof authors | undefined) => {
+        if (!previous) return [updated];
+        return previous.map((author) => (author.id === updated.id ? updated : author));
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["admin", "authors"] });
+      await queryClient.invalidateQueries({ queryKey: ["auth"] });
+
+      if (!isBlocked && accessBanCloseSessions && selectedAccessLog.user_id === user?.id) {
+        const client = requireSupabaseClient();
+        await client.auth.signOut();
+      }
+
+      if (!isBlocked && accessBanCloseSessions && selectedAccessLog.user_id !== user?.id) {
+        window.alert("El usuario quedó bloqueado. La invalidación masiva de sesiones requiere un backend/Edge Function para cerrar todas las sesiones activas de ese perfil.");
+      }
+
+      setAccessBanReason("");
+      setShowAccessBanModal(false);
+      setAccessBanCloseSessions(true);
+      window.alert(isBlocked ? "Usuario habilitado correctamente." : "Usuario bloqueado correctamente.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo actualizar el estado del usuario.";
+      window.alert(message);
+    }
+  };
+
+  const handleDeleteAccessLogs = async (mode: "selected" | "filtered" | "all") => {
+    let ids: number[] = [];
+
+    if (mode === "selected") {
+      if (!selectedAccessLog) {
+        return;
+      }
+      ids = [selectedAccessLog.id];
+    }
+
+    if (mode === "filtered") {
+      ids = filteredAccessLogs.map((log) => log.id);
+    }
+
+    if (mode === "all") {
+      ids = adminAccessLogs.map((log) => log.id);
+    }
+
+    if (ids.length === 0) {
+      window.alert("No hay registros para borrar con este filtro.");
+      return;
+    }
+
+    const targetLabel = mode === "selected" ? "el registro seleccionado" : mode === "filtered" ? `${ids.length} registros filtrados` : `${ids.length} registros en total`;
+    const confirmed = window.confirm(`¿Seguro que querés borrar ${targetLabel}? Esta acción no se puede deshacer.`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteAdminAccessLogs({ mode, ids });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "access-logs"] });
+      setShowDeleteAccessLogsModal(false);
+      setSelectedAccessLogId((currentId) => (currentId !== null && ids.includes(currentId) ? null : currentId));
+      setAccessVisibleCount(10);
+      window.alert("Los registros seleccionados fueron eliminados.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo borrar los registros.";
+      window.alert(message);
+    }
+  };
+
+  useEffect(() => {
+    setAccessVisibleCount(10);
+  }, [accessSearchTerm, accessStatusFilter, accessRoleFilter, accessDateFilter]);
+
   const navItems = useMemo(
     () =>
       isEditorUser
@@ -486,6 +910,7 @@ function AdminPage() {
                   { id: "authors", label: "Autores", icon: Users },
                   { id: "users", label: "Usuarios", icon: Users },
                   { id: "newsletter", label: "Newsletter", icon: Mail },
+                  { id: "access-control", label: "Control de Acceso", icon: ShieldCheck },
                 ]
               : []),
           ],
@@ -885,26 +1310,125 @@ function AdminPage() {
           </aside>
 
           <main className="min-w-0 flex-1 rounded-[22px] border border-slate-200 bg-[#faf9f8] p-4 sm:p-5">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-primary">Centro de trabajo</p>
-                <h2 className="mt-1 text-2xl font-black text-slate-900">
-                  {visibleTab === "overview" && "Resumen"}
-                  {visibleTab === "articles" && "Artículos"}
-                  {visibleTab === "new" && "Crear artículo"}
-                  {visibleTab === "management" && "Administrar"}
-                  {visibleTab === "general" && "Administración general"}
-                  {visibleTab === "categories" && "Categorías"}
-                  {visibleTab === "tags" && "Etiquetas"}
-                  {visibleTab === "authors" && "Autores"}
-                  {visibleTab === "users" && "Usuarios"}
-                  {visibleTab === "newsletter" && "Newsletter"}
-                </h2>
+            {visibleTab !== "access-control" && (
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-primary">Centro de trabajo</p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-900">
+                    {visibleTab === "overview" && "Resumen"}
+                    {visibleTab === "articles" && "Artículos"}
+                    {visibleTab === "new" && "Crear artículo"}
+                    {visibleTab === "management" && "Administrar"}
+                    {visibleTab === "general" && "Administración general"}
+                    {visibleTab === "categories" && "Categorías"}
+                    {visibleTab === "tags" && "Etiquetas"}
+                    {visibleTab === "authors" && "Autores"}
+                    {visibleTab === "users" && "Usuarios"}
+                    {visibleTab === "newsletter" && "Newsletter"}
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-medium text-emerald-700">Online</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-medium text-emerald-700">Online</span>
-              </div>
+            )}
+
+      {showDeleteAccessLogsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-red-500">Advertencia</p>
+              <h3 className="mt-2 text-2xl font-black text-slate-900">Borrar registros</h3>
             </div>
+
+            <p className="mb-5 text-sm leading-6 text-slate-600">
+              Esta acción elimina los registros del panel y no se puede deshacer.
+            </p>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => void handleDeleteAccessLogs("filtered")}
+                disabled={filteredAccessLogs.length === 0}
+                className="w-full rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-left text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Borrar visibles ({filteredAccessLogs.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteAccessLogs("all")}
+                disabled={adminAccessLogs.length === 0}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Borrar todo ({adminAccessLogs.length})
+              </button>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteAccessLogsModal(false)}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAccessBanModal && selectedAccessLog?.user_id && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-red-500">Seguridad</p>
+              <h3 className="mt-2 text-2xl font-black text-slate-900">{targetUserAccess?.is_blocked ? "Desbloquear usuario" : "Bloquear usuario"}</h3>
+            </div>
+
+            <label className="mb-3 block text-sm font-medium text-slate-700">
+              Motivo de suspensión
+              <textarea
+                value={accessBanReason}
+                onChange={(event) => setAccessBanReason(event.target.value)}
+                rows={4}
+                placeholder="Ej.: incumplimiento de normas o actividad sospechosa..."
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-red-400"
+              />
+            </label>
+
+            <label className="mb-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={accessBanCloseSessions}
+                onChange={(event) => setAccessBanCloseSessions(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+              />
+              Cerrar todas sus sesiones activas inmediatamente
+            </label>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAccessBanModal(false);
+                  setAccessBanReason("");
+                  setAccessBanCloseSessions(true);
+                }}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleUserBan}
+                className="rounded-full bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-500"
+              >
+                {targetUserAccess?.is_blocked ? "Desbloquear" : "Bloquear usuario"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {visibleTab === "overview" && (
         <div className="space-y-6">
@@ -1052,6 +1576,268 @@ function AdminPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {visibleTab === "access-control" && (
+        <section className="rounded-3xl border bg-card p-5 shadow-sm sm:p-6">
+          <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">SEGURIDAD</p>
+              <h2 className="text-2xl font-black text-foreground">Control de Acceso</h2>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {canDeleteAccessLogs && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteAccessLogsModal(true)}
+                  className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-100"
+                >
+                  Borrar
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={exportAccessLogsCsv}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Exportar CSV
+              </button>
+              <button
+                type="button"
+                onClick={exportAccessLogsPdf}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Exportar PDF
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-6 flex flex-wrap gap-2">
+            {accessDateOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setAccessDateFilter(option.key)}
+                className={[
+                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                  accessDateFilter === option.key
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mb-6 grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl border bg-background p-4">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Total</p>
+              <p className="mt-2 text-3xl font-black text-foreground">{accessLogSummary.total}</p>
+            </div>
+            <div className="rounded-2xl border bg-background p-4">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Exitosos</p>
+              <p className="mt-2 text-3xl font-black text-emerald-600">{accessLogSummary.success}</p>
+            </div>
+            <div className="rounded-2xl border bg-background p-4">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Fallidos</p>
+              <p className="mt-2 text-3xl font-black text-rose-600">{accessLogSummary.failure}</p>
+            </div>
+            <div className="rounded-2xl border bg-background p-4">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Últimos 7 días</p>
+              <p className="mt-2 text-3xl font-black text-foreground">{accessLogSummary.last7Days}</p>
+            </div>
+          </div>
+
+          <div className="mb-6 grid gap-3 lg:grid-cols-[1.2fr_0.7fr_0.7fr]">
+            <input
+              value={accessSearchTerm}
+              onChange={(event) => setAccessSearchTerm(event.target.value)}
+              placeholder="Buscar por nombre, email, rol, host o IP"
+              className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary"
+            />
+            <select
+              value={accessStatusFilter}
+              onChange={(event) => setAccessStatusFilter(event.target.value as "all" | "success" | "failure")}
+              className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary"
+            >
+              <option value="all">Todos los estados</option>
+              <option value="success">Exitosos</option>
+              <option value="failure">Fallidos</option>
+            </select>
+            <select
+              value={accessRoleFilter}
+              onChange={(event) => setAccessRoleFilter(event.target.value as "all" | string)}
+              className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary"
+            >
+              <option value="all">Todos los roles</option>
+              {[...new Set(adminAccessLogs.map((log) => log.role).filter(Boolean))].map((role) => (
+                <option key={role} value={role ?? ""}>
+                  {role}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+            <div className="overflow-hidden rounded-2xl border bg-background">
+              <div className="max-h-[60vh] overflow-y-auto">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600 shadow-sm">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Usuario</th>
+                        <th className="px-4 py-3 font-semibold">Rol</th>
+                        <th className="px-4 py-3 font-semibold">Estado</th>
+                        <th className="px-4 py-3 font-semibold">Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleAccessLogs.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-500">
+                            No hay accesos registrados con el filtro actual.
+                          </td>
+                        </tr>
+                      ) : (
+                        visibleAccessLogs.map((log) => {
+                          const deviceType = getDeviceTypeFromUserAgent(log.user_agent);
+                          const DeviceIcon = getDeviceIconForType(deviceType);
+
+                          return (
+                            <tr
+                              key={log.id}
+                              onClick={() => setSelectedAccessLogId(log.id)}
+                              className={[
+                                "cursor-pointer border-t border-slate-200 transition hover:bg-slate-50",
+                                selectedAccessLog?.id === log.id ? "bg-slate-50" : "",
+                              ].join(" ")}
+                            >
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600">
+                                    <DeviceIcon className="h-3.5 w-3.5" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-slate-900">{log.full_name || "Sin nombre"}</span>
+                                      {authors.some((author) => author.id === log.user_id && author.is_blocked) && (
+                                        <span className="inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-rose-700">
+                                          BLOQUEADO
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-slate-500">{log.email || "Sin email"}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-slate-600">{log.role || "—"}</td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={[
+                                    "inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em]",
+                                    log.status === "success"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : log.status === "failure"
+                                        ? "bg-rose-100 text-rose-700"
+                                        : "bg-slate-200 text-slate-700",
+                                  ].join(" ")}
+                                >
+                                  {formatAccessStatus(log.status)}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-slate-600">
+                                {new Date(log.accessed_at).toLocaleString("es-AR", {
+                                  dateStyle: "short",
+                                  timeStyle: "short",
+                                })}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {hasMoreAccessLogs && (
+                <div className="sticky bottom-0 z-20 border-t border-slate-200 bg-slate-50/95 p-3 text-center backdrop-blur-sm">
+                  <button
+                    type="button"
+                    onClick={() => setAccessVisibleCount((count) => count + 10)}
+                    className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    Cargar más
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border bg-background p-4">
+              {selectedAccessLog ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Detalle</p>
+                    <h3 className="mt-2 text-xl font-black text-slate-900">{selectedAccessLog.full_name || "Acceso sin nombre"}</h3>
+                  </div>
+
+                  <div className="space-y-3 text-sm text-slate-600">
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>Email</span><span className="font-medium text-slate-900">{selectedAccessLog.email || "—"}</span></div>
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>Rol</span><span className="font-medium text-slate-900">{selectedAccessLog.role || "—"}</span></div>
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>Estado</span><span className="font-medium text-slate-900">{formatAccessStatus(selectedAccessLog.status)}</span></div>
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>Dispositivo</span><span className="font-medium text-slate-900">{getDeviceTypeFromUserAgent(selectedAccessLog.user_agent)}</span></div>
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>Host</span><span className="font-medium text-slate-900 break-all">{selectedAccessLog.page_url || "—"}</span></div>
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>IP</span><span className="font-medium text-slate-900 break-all">{resolveAccessIpFallback(selectedAccessLog.ip_address, selectedAccessLog.user_id)}</span></div>
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>Navegador</span><span className="font-medium text-slate-900">{selectedAccessLog.browser || "—"}</span></div>
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>Sistema</span><span className="font-medium text-slate-900">{selectedAccessLog.operating_system || "—"}</span></div>
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>Idioma</span><span className="font-medium text-slate-900">{selectedAccessLog.language || "—"}</span></div>
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>Timezone</span><span className="font-medium text-slate-900">{selectedAccessLog.timezone || "—"}</span></div>
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>Referrer</span><span className="font-medium text-slate-900 break-all">{selectedAccessLog.referrer || "—"}</span></div>
+                    <div className="flex justify-between gap-3 border-b border-slate-200 pb-2"><span>Session ID</span><span className="font-medium text-slate-900 break-all">{selectedAccessLog.session_id || "—"}</span></div>
+                    <div className="flex justify-between gap-3"><span>Último acceso</span><span className="font-medium text-slate-900">{new Date(selectedAccessLog.accessed_at).toLocaleString("es-AR", {dateStyle: "medium", timeStyle: "medium"})}</span></div>
+                  </div>
+
+                  <div className="space-y-3 rounded-2xl border border-rose-200 bg-rose-50 p-3">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-rose-600">Acción</p>
+
+                    {canBanSelectedUser && (
+                      targetUserAccess?.is_blocked ? (
+                        <>
+                          <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                            <span>Usuario Suspendido</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleToggleUserBan}
+                            className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-500"
+                          >
+                            Desbloquear / Habilitar Usuario
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowAccessBanModal(true)}
+                          className="inline-flex w-full items-center justify-center rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-500"
+                        >
+                          Bloquear / Banear Usuario
+                        </button>
+                      )
+                    )}
+
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-full min-h-[260px] items-center justify-center rounded-2xl border border-dashed border-slate-200 text-sm text-slate-500">
+                  Seleccioná un registro para ver el detalle completo.
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
       )}
 
       {visibleTab === "articles" && (

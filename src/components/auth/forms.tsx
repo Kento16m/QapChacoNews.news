@@ -1,11 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
+import { readBlockedAccountMessage } from "@/lib/auth";
 import { Field, SubmitButton, TextLink } from "./fields";
 import { SocialButtons } from "./SocialButtons";
 
@@ -28,7 +29,13 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Ocurrió un er
 
 export function LoginForm() {
   const { signInWithEmail, setDialogOpen, setDialogView } = useAuth();
+  const [blockedNotice, setBlockedNotice] = useState<string | null>(null);
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<z.infer<typeof loginSchema>>({ resolver: zodResolver(loginSchema) });
+
+  useEffect(() => {
+    setBlockedNotice(readBlockedAccountMessage());
+  }, []);
+
   const onSubmit = handleSubmit(async (d) => {
     try {
       const u = await signInWithEmail(d.email, d.password);
@@ -43,6 +50,11 @@ export function LoginForm() {
         No tenés una cuenta?{' '}
         <TextLink onClick={() => setDialogView("register")}>Registrate</TextLink>
       </p>
+      {blockedNotice && (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+          {blockedNotice}
+        </div>
+      )}
       <div className="mt-6"><SocialButtons /></div>
       <form onSubmit={onSubmit} noValidate className="mt-3 space-y-4">
         <Field label="Correo electrónico" type="email" autoComplete="email" autoFocus placeholder="tu@correo.com" error={errors.email?.message} {...register("email")} />

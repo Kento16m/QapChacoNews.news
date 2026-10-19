@@ -2,6 +2,77 @@ import type { User } from "@supabase/supabase-js";
 import { requireSupabaseClient } from "@/lib/supabase";
 import { getProfileColor } from "@/lib/profile-colors";
 
+export const BLOCKED_ACCOUNT_MESSAGE_KEY = "blocked-account-message";
+
+const DEFAULT_BLOCKED_ACCOUNT_MESSAGE = "Tu cuenta fue suspendida por el administrador.";
+
+export function setBlockedAccountMessage(reason?: string | null) {
+  if (typeof window === "undefined") return;
+
+  const message = (reason ?? DEFAULT_BLOCKED_ACCOUNT_MESSAGE).trim() || DEFAULT_BLOCKED_ACCOUNT_MESSAGE;
+  sessionStorage.setItem(BLOCKED_ACCOUNT_MESSAGE_KEY, message);
+  localStorage.setItem(BLOCKED_ACCOUNT_MESSAGE_KEY, message);
+}
+
+export function readBlockedAccountMessage() {
+  if (typeof window === "undefined") return null;
+
+  const message = sessionStorage.getItem(BLOCKED_ACCOUNT_MESSAGE_KEY) ?? localStorage.getItem(BLOCKED_ACCOUNT_MESSAGE_KEY);
+  if (!message) return null;
+
+  sessionStorage.removeItem(BLOCKED_ACCOUNT_MESSAGE_KEY);
+  localStorage.removeItem(BLOCKED_ACCOUNT_MESSAGE_KEY);
+  return message;
+}
+
+export function clearAuthStorage() {
+  if (typeof window === "undefined") return;
+
+  try {
+    const keys = [
+      ...Array.from(window.localStorage.keys()),
+      ...Array.from(window.sessionStorage.keys()),
+    ];
+
+    for (const key of new Set(keys)) {
+      if (
+        key.startsWith("sb-") ||
+        key.includes("supabase") ||
+        key.includes("auth") ||
+        key.includes("blocked-account-message")
+      ) {
+        window.localStorage.removeItem(key);
+        window.sessionStorage.removeItem(key);
+      }
+    }
+  } catch (error) {
+    console.warn("No se pudieron limpiar los datos de sesión del usuario bloqueado:", error);
+  }
+}
+
+export async function forceBlockedAccountLogout(reason?: string | null) {
+  const client = requireSupabaseClient();
+  const message = (reason ?? "Tu cuenta fue suspendida por el administrador.").trim() || "Tu cuenta fue suspendida por el administrador.";
+
+  setBlockedAccountMessage(message);
+  clearAuthStorage();
+
+  try {
+    await client.auth.signOut();
+  } catch (error) {
+    console.warn("No se pudo cerrar la sesión del usuario bloqueado:", error);
+  }
+
+  if (typeof window !== "undefined") {
+    const currentPath = window.location.pathname || "/";
+    if (currentPath !== "/") {
+      window.location.replace("/");
+    }
+  }
+
+  return message;
+}
+
 const mapAuthError = (error: { code?: string; message?: string } | null) => {
   if (!error) return new Error("Ocurrió un error inesperado.");
 
@@ -74,8 +145,9 @@ export async function signInWithPassword(email: string, password: string) {
 
   const profileStatus = await getProfileAccessStatus(client, data.user.id);
   if (profileStatus.is_blocked) {
-    await client.auth.signOut();
-    throw new Error("Tu cuenta está bloqueada por el administrador.");
+    const message = profileStatus.blocked_reason?.trim() || "Tu cuenta fue suspendida por el administrador.";
+    await forceBlockedAccountLogout(message);
+    throw new Error(message);
   }
 
   return data.user as User;
@@ -206,13 +278,42 @@ export async function getSession() {
   const client = requireSupabaseClient();
   const { data, error } = await client.auth.getSession();
   if (error) throw mapAuthError(error);
-  return data.session?.user ?? null;
+
+  const sessionUser = data.session?.user ?? null;
+  if (!sessionUser) return null;
+
+  const profileStatus = await getProfileAccessStatus(client, sessionUser.id);
+  if (profileStatus.is_blocked) {
+    const message = profileStatus.blocked_reason?.trim() || "Tu cuenta fue suspendida por el administrador.";
+    await forceBlockedAccountLogout(message);
+    return null;
+  }
+
+  return sessionUser;
 }
 
 export function onAuthStateChange(callback: (user: User | null) => void) {
   const client = requireSupabaseClient();
-  const { data } = client.auth.onAuthStateChange((_event, session) => {
-    callback(session?.user ?? null);
+  const { data } = client.auth.onAuthStateChange(async (_event, session) => {
+    const sessionUser = session?.user ?? null;
+    if (!sessionUser) {
+      callback(null);
+      return;
+    }
+
+    try {
+      const profileStatus = await getProfileAccessStatus(client, sessionUser.id);
+      if (profileStatus.is_blocked) {
+        const message = profileStatus.blocked_reason?.trim() || "Tu cuenta fue suspendida por el administrador.";
+        await forceBlockedAccountLogout(message);
+        callback(null);
+        return;
+      }
+      callback(sessionUser);
+    } catch (error) {
+      console.warn("No se pudo validar la sesión del usuario:", error);
+      callback(null);
+    }
   });
 
   return () => {

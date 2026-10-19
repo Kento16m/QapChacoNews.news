@@ -40,7 +40,7 @@ export const getAllowedAdminHosts = (): string[] => {
 
   return [...new Set(rawHosts)]
     .filter(Boolean)
-    .filter((host) => host && !host.startsWith("*.") && !host.startsWith("http://") && !host.startsWith("https://"));
+    .filter((host) => host && !host.startsWith("http://") && !host.startsWith("https://"));
 };
 
 export const isAdminHostAllowed = (hostname?: string) => {

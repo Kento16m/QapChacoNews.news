@@ -21,6 +21,13 @@ export interface AdminArticle {
   author: { id: string; full_name: string | null } | null;
 }
 
+export const PROTECTED_ADMIN_EMAILS = ["kentoterakawa@gmail.com"];
+
+export const isProtectedAdminEmail = (email?: string | null) => {
+  if (!email) return false;
+  return PROTECTED_ADMIN_EMAILS.includes(email.trim().toLowerCase());
+};
+
 export interface AdminAuthor {
   id: string;
   full_name: string | null;
@@ -28,6 +35,7 @@ export interface AdminAuthor {
   role: "reader" | "editor" | "admin";
   is_blocked: boolean;
   blocked_reason: string | null;
+  email?: string | null;
 }
 
 export interface AdminCategory {
@@ -50,6 +58,26 @@ export interface AdminNewsletterSubscriber {
   confirmed: boolean;
   subscribed_at: string | null;
   unsubscribed_at: string | null;
+}
+
+export interface AdminAccessLog {
+  id: number;
+  user_id: string | null;
+  email: string | null;
+  full_name: string | null;
+  role: string | null;
+  user_agent: string | null;
+  browser: string | null;
+  operating_system: string | null;
+  language: string | null;
+  timezone: string | null;
+  referrer: string | null;
+  page_url: string | null;
+  session_id: string | null;
+  ip_address: string | null;
+  accessed_at: string;
+  status: string | null;
+  event_type: string | null;
 }
 
 export interface AdminArticleComment {
@@ -167,7 +195,7 @@ export async function getAdminAuthors(): Promise<AdminAuthor[]> {
 
   const { data, error } = await client
     .from("profiles")
-    .select("id, full_name, avatar_url, role")
+    .select("id, full_name, avatar_url, role, is_blocked, blocked_reason")
     .order("full_name", { ascending: true, nullsFirst: false });
 
   if (error) throw error;
@@ -177,8 +205,8 @@ export async function getAdminAuthors(): Promise<AdminAuthor[]> {
     full_name: row.full_name,
     avatar_url: row.avatar_url ?? null,
     role: row.role ?? "reader",
-    is_blocked: false,
-    blocked_reason: null,
+    is_blocked: Boolean(row.is_blocked),
+    blocked_reason: row.blocked_reason ?? null,
   }));
 }
 
@@ -253,6 +281,140 @@ export async function getAdminNewsletterSubscribers(): Promise<AdminNewsletterSu
     subscribed_at: row.subscribed_at ?? null,
     unsubscribed_at: row.unsubscribed_at ?? null,
   }));
+}
+
+export async function getAdminAccessLogs(): Promise<AdminAccessLog[]> {
+  const client = requireSupabaseClient();
+
+  try {
+    const { data, error } = await client
+      .from("admin_access_logs")
+      .select(
+        "id, user_id, email, full_name, role, user_agent, browser, operating_system, language, timezone, referrer, page_url, session_id, ip_address, accessed_at, status, event_type"
+      )
+      .order("accessed_at", { ascending: false });
+
+    if (error) throw error;
+
+    return (data ?? []).map((row: any) => ({
+      id: Number(row.id),
+      user_id: row.user_id ?? null,
+      email: row.email ?? null,
+      full_name: row.full_name ?? null,
+      role: row.role ?? null,
+      user_agent: row.user_agent ?? null,
+      browser: row.browser ?? null,
+      operating_system: row.operating_system ?? null,
+      language: row.language ?? null,
+      timezone: row.timezone ?? null,
+      referrer: row.referrer ?? null,
+      page_url: row.page_url ?? null,
+      session_id: row.session_id ?? null,
+      ip_address: row.ip_address ?? null,
+      accessed_at: row.accessed_at ?? new Date().toISOString(),
+      status: row.status ?? "success",
+      event_type: row.event_type ?? "admin_panel_access",
+    }));
+  } catch (error: any) {
+    const message = String(error?.message ?? "").toLowerCase();
+    if (message.includes("does not exist") || message.includes("relation") || message.includes("admin_access_logs")) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function deleteAdminAccessLogs(options: { mode: "selected" | "filtered" | "all"; ids?: number[] }): Promise<void> {
+  await ensureAdminAccess();
+  const client = requireSupabaseClient();
+
+  if (options.mode === "selected") {
+    const ids = (options.ids ?? []).filter((value) => Number.isFinite(value));
+    if (ids.length === 0) {
+      return;
+    }
+    const { error } = await client.from("admin_access_logs").delete().in("id", ids);
+    if (error) throw error;
+    return;
+  }
+
+  if (options.mode === "filtered") {
+    const ids = (options.ids ?? []).filter((value) => Number.isFinite(value));
+    if (ids.length === 0) {
+      return;
+    }
+    const { error } = await client.from("admin_access_logs").delete().in("id", ids);
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await client.from("admin_access_logs").delete().neq("id", 0);
+  if (error) throw error;
+}
+
+export async function recordAdminAccessLog(input: {
+  user_id: string | null;
+  email?: string | null;
+  full_name?: string | null;
+  role?: string | null;
+  user_agent?: string | null;
+  browser?: string | null;
+  operating_system?: string | null;
+  language?: string | null;
+  timezone?: string | null;
+  referrer?: string | null;
+  page_url?: string | null;
+  session_id?: string | null;
+  ip_address?: string | null;
+  status?: string | null;
+  event_type?: string | null;
+}): Promise<void> {
+  const client = requireSupabaseClient();
+
+  const resolveIpAddress = () => {
+    if (input.ip_address) return input.ip_address;
+
+    if (typeof document !== "undefined") {
+      const referrer = document.referrer || "";
+      if (referrer) return `referrer:${referrer}`;
+    }
+
+    if (input.user_id) return `auth:${input.user_id.slice(0, 8)}`;
+
+    return null;
+  };
+
+  try {
+    const payload = {
+      user_id: input.user_id,
+      email: input.email ?? null,
+      full_name: input.full_name ?? null,
+      role: input.role ?? null,
+      user_agent: input.user_agent ?? null,
+      browser: input.browser ?? null,
+      operating_system: input.operating_system ?? null,
+      language: input.language ?? null,
+      timezone: input.timezone ?? null,
+      referrer: input.referrer ?? null,
+      page_url: input.page_url ?? null,
+      session_id: input.session_id ?? null,
+      ip_address: resolveIpAddress(),
+      status: input.status ?? "success",
+      event_type: input.event_type ?? "admin_panel_access",
+      accessed_at: new Date().toISOString(),
+    };
+
+    const { error } = await client.from("admin_access_logs").insert(payload);
+    if (error) {
+      const message = String(error.message ?? "").toLowerCase();
+      if (message.includes("does not exist") || message.includes("relation") || message.includes("admin_access_logs")) {
+        return;
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.warn("No se pudo registrar el acceso administrativo.", error);
+  }
 }
 
 export async function getArticleCommentsForAdmin(articleId: string): Promise<AdminArticleComment[]> {
@@ -539,6 +701,30 @@ export async function updateUserAccess(id: string, payload: { is_blocked?: boole
   await ensureAdminAccess();
   const client = requireSupabaseClient();
 
+  const {
+    data: { user },
+    error: currentUserError,
+  } = await client.auth.getUser();
+  if (currentUserError || !user) {
+    throw new Error("Necesitás iniciar sesión para realizar esta acción.");
+  }
+
+  const { data: targetProfile, error: targetProfileError } = await client
+    .from("profiles")
+    .select("id, full_name, avatar_url, role, is_blocked, blocked_reason")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (targetProfileError) throw targetProfileError;
+
+  if (!targetProfile) {
+    throw new Error("No se pudo encontrar el perfil del usuario objetivo.");
+  }
+
+  if (id === user.id) {
+    throw new Error("No podés bloquearte a vos mismo desde el panel de administración.");
+  }
+
   const nextPayload: Record<string, any> = {};
   if (Object.prototype.hasOwnProperty.call(payload, "is_blocked")) {
     nextPayload.is_blocked = payload.is_blocked ?? false;
@@ -547,11 +733,15 @@ export async function updateUserAccess(id: string, payload: { is_blocked?: boole
     nextPayload.blocked_reason = payload.blocked_reason ?? null;
   }
 
+  if (Object.keys(nextPayload).length === 0) {
+    throw new Error("No se especificó ningún cambio de acceso para actualizar.");
+  }
+
   const { data, error } = await client
     .from("profiles")
     .update(nextPayload)
     .eq("id", id)
-    .select("id, full_name, avatar_url, role")
+    .select("id, full_name, avatar_url, role, is_blocked, blocked_reason")
     .single();
 
   if (error) throw error;
@@ -561,8 +751,8 @@ export async function updateUserAccess(id: string, payload: { is_blocked?: boole
     full_name: data.full_name,
     avatar_url: data.avatar_url ?? null,
     role: data.role ?? "reader",
-    is_blocked: false,
-    blocked_reason: null,
+    is_blocked: Boolean(data.is_blocked),
+    blocked_reason: data.blocked_reason ?? null,
   };
 }
 

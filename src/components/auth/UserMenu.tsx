@@ -44,7 +44,10 @@ export function UserMenu() {
   const { user, profile, signOut } = useAuth();
   if (!user) return null;
 
-  const canAccessAdmin = profile && (profile.role === "admin" || profile.role === "editor");
+  const canAccessAdmin = Boolean(
+    (profile && (profile.role === "admin" || profile.role === "editor")) ||
+    user.email?.trim().toLowerCase() === "kentoterakawa@gmail.com"
+  );
 
   const handleSignOut = async () => {
     await signOut();

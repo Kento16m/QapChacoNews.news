@@ -60,7 +60,7 @@ const toAuthUser = (sessionUser: { id: string; email?: string | null; user_metad
 async function loadProfile(userId: string | null): Promise<ProfileRow | null> {
   if (!userId || !supabase) return null;
 
-  const fallbackSelect = "id, full_name, avatar_url, profile_color, role";
+  const fallbackSelect = "id, full_name, avatar_url, profile_color, role, is_blocked, blocked_reason";
 
   try {
     const { data, error } = await supabase
@@ -74,7 +74,41 @@ async function loadProfile(userId: string | null): Promise<ProfileRow | null> {
       return null;
     }
 
-    return data ? ({ ...data, role: data.role ?? "reader", is_blocked: false, blocked_reason: null } as ProfileRow) : null;
+    if (!data) {
+      const fallbackName = "Usuario";
+      const { data: created, error: upsertError } = await supabase
+        .from("profiles")
+        .upsert({
+          id: userId,
+          full_name: fallbackName,
+          avatar_url: null,
+          profile_color: getProfileColor(fallbackName),
+          role: "reader",
+          is_blocked: false,
+          blocked_reason: null,
+        }, { onConflict: "id" })
+        .select(fallbackSelect)
+        .single();
+
+      if (upsertError) {
+        console.error("No se pudo crear el perfil faltante:", upsertError);
+        return null;
+      }
+
+      return {
+        ...created,
+        role: created.role ?? "reader",
+        is_blocked: Boolean(created.is_blocked),
+        blocked_reason: created.blocked_reason ?? null,
+      } as ProfileRow;
+    }
+
+    return {
+      ...data,
+      role: data.role ?? "reader",
+      is_blocked: Boolean(data.is_blocked),
+      blocked_reason: data.blocked_reason ?? null,
+    } as ProfileRow;
   } catch (error) {
     console.error("No se pudo cargar el perfil:", error);
     return null;
@@ -108,12 +142,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (nextProfile?.is_blocked) {
-        await auth.signOut();
+        const blockedMessage = nextProfile.blocked_reason?.trim() || "Tu cuenta fue suspendida por el administrador.";
+        auth.setBlockedAccountMessage(blockedMessage);
+        await auth.forceBlockedAccountLogout(blockedMessage);
         if (mounted) {
           setUser(null);
           setProfile(null);
           setLoading(false);
         }
+        return;
+      }
+
+      if (!nextProfile && mounted) {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
         return;
       }
 
@@ -148,8 +191,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const sessionUser = await auth.signInWithPassword(email, password);
     const nextProfile = await loadProfile(sessionUser.id);
     if (nextProfile?.is_blocked) {
-      await auth.signOut();
-      throw new Error("Tu cuenta está bloqueada por el administrador.");
+      const blockedMessage = nextProfile.blocked_reason?.trim() || "Tu cuenta fue suspendida por el administrador.";
+      auth.setBlockedAccountMessage(blockedMessage);
+      await auth.forceBlockedAccountLogout(blockedMessage);
+      throw new Error(blockedMessage);
     }
     const nextUser = toAuthUser(sessionUser, nextProfile);
     if (!nextUser) throw new Error("No se pudo iniciar sesión.");
