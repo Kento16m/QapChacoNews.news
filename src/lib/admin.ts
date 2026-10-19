@@ -668,6 +668,38 @@ export async function uploadArticleCover(file: File): Promise<string> {
   return data.publicUrl;
 }
 
+export async function uploadArticleMedia(file: File): Promise<string> {
+  const client = requireSupabaseClient();
+  const fileType = file.type || "application/octet-stream";
+  const isImage = fileType.startsWith("image/");
+  const optimizedFile = isImage ? await prepareWebpFile(file) : file;
+
+  const baseName = (optimizedFile.name || `article-media-${Date.now()}`).trim();
+  const safeName = baseName.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
+  const fileName = `article-media/${Date.now()}-${safeName}`;
+
+  const { error } = await client.storage.from("article-media").upload(fileName, optimizedFile, {
+    cacheControl: "3600",
+    upsert: true,
+    contentType: optimizedFile.type || fileType,
+  });
+
+  if (error) {
+    const message = String(error.message ?? "").toLowerCase();
+    if (message.includes("bucket") || message.includes("not found") || message.includes("does not exist")) {
+      throw new Error("El bucket `article-media` no existe en Supabase Storage. Creá el bucket y dejalo público para poder subir imágenes o videos dentro de los artículos.");
+    }
+    throw error;
+  }
+
+  const { data } = client.storage.from("article-media").getPublicUrl(fileName);
+  if (!data?.publicUrl) {
+    throw new Error("No se pudo generar la URL pública del archivo multimedia.");
+  }
+
+  return data.publicUrl;
+}
+
 export async function deleteArticle(id: string): Promise<void> {
   await ensureAdminAccess();
   const client = requireSupabaseClient();
