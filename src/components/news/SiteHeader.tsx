@@ -1,14 +1,18 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { User, Menu, Moon, Search, Sun, CloudSun, MapPin } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { User, Menu, Moon, Search, Sun, CloudSun, MapPin, LoaderCircle, X } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { useCategories } from "@/hooks/use-news";
+import { useCategories, useDebouncedValue } from "@/hooks/use-news";
 import { Logo } from "./primitives";
 import { Ticker } from "./Ticker";
 import { useAuth } from "@/hooks/useAuth";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { Button } from "@/components/ui/button";
 import { SheetClose } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
+import { searchArticles } from "@/lib/api";
+import { useSearchContext } from "@/contexts/SearchContext";
 import {
   Dialog,
   DialogClose,
@@ -557,20 +561,203 @@ function WeatherForecastModal() {
   );
 }
 
-function SearchBox({ className }: { className?: string }) {
+function SearchModal() {
   const navigate = useNavigate();
-  const [q, setQ] = useState("");
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    navigate({ to: "/buscar", search: { q: q.trim() } });
+  const { searchTerm, setSearchTerm, isSearchOpen, setIsSearchOpen } = useSearchContext();
+  const trimmed = searchTerm.trim();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+
+  const debouncedTerm = useDebouncedValue(trimmed, 400);
+  const searchQuery = useQuery({
+    queryKey: ["search-modal", debouncedTerm],
+    queryFn: () => searchArticles(debouncedTerm, 1, 8),
+    enabled: isSearchOpen && debouncedTerm.length > 0,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (!isSearchOpen) return;
+    setIsClosing(false);
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 60);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        handleRequestClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isSearchOpen]);
+
+  const handleRequestClose = () => {
+    setIsClosing(true);
+    window.setTimeout(() => {
+      setIsSearchOpen(false);
+      setIsClosing(false);
+    }, 180);
   };
+
+  const handleSubmit = (event?: FormEvent) => {
+    if (event) event.preventDefault();
+    if (!trimmed) return;
+    navigate({ to: "/buscar", search: { q: trimmed } });
+    handleRequestClose();
+  };
+
+  if (!isSearchOpen) return null;
+  if (typeof window !== "undefined" && window.innerWidth >= 768) return null;
+
   return (
-    <form onSubmit={submit} role="search" className={className}>
+    <div
+      className={`fixed inset-0 z-[80] bg-background/80 p-4 backdrop-blur-sm transition-opacity duration-300 ${isClosing ? "opacity-0" : "opacity-100"}`}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) handleRequestClose();
+      }}
+    >
+      <div
+        className={`mx-auto flex h-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-border bg-card shadow-[0_25px_90px_rgba(15,23,42,0.28)] transition-all duration-300 ${isClosing ? "translate-y-[-12px] scale-[0.98] opacity-0" : "translate-y-0 scale-100 opacity-100"}`}
+      >
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+          <label className="relative block flex-1">
+            <span className="sr-only">Buscar noticias</span>
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={inputRef}
+              autoFocus
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  handleSubmit();
+                }
+              }}
+              placeholder="Buscar en QAP ChacoNews…"
+              className="h-12 w-full rounded-full border bg-secondary pl-11 pr-4 text-base outline-none transition focus:border-primary focus:bg-card"
+            />
+          </label>
+          <button
+            type="button"
+            aria-label="Cerrar búsqueda"
+            onClick={handleRequestClose}
+            className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+            <span className="hidden sm:inline">Cancelar</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {!trimmed && (
+            <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+              Escribí un término para buscar noticias.
+            </div>
+          )}
+
+          {trimmed && (
+            <div className="space-y-3">
+              {searchQuery.isLoading ? (
+                <div className="space-y-3 pt-1">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={index} className="h-20 animate-pulse rounded-2xl border border-border bg-muted/40" />
+                  ))}
+                </div>
+              ) : searchQuery.data?.items.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                  No se encontraron noticias que coinciden con "{trimmed}".
+                </div>
+              ) : (
+                searchQuery.data?.items.map((article) => (
+                  <Link
+                    key={article.id}
+                    to="/noticia/$slug"
+                    params={{ slug: article.slug }}
+                    className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 transition hover:bg-muted"
+                    onClick={handleRequestClose}
+                  >
+                    <img
+                      src={article.cover_image_url ?? "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=600&q=80"}
+                      alt={article.title}
+                      className="h-16 w-20 rounded-xl object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-sm font-semibold text-foreground">{article.title}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        <span>{article.category?.name ?? "General"}</span>
+                        <span>•</span>
+                        <time>
+                          {new Date(article.published_at).toLocaleDateString("es-PY", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </time>
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              )}
+
+              {trimmed && !searchQuery.isLoading && (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground"
+                >
+                  Ver todos los resultados para "{trimmed}"
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SearchBox({
+  className,
+  onOpenMobileSearch,
+}: {
+  className?: string;
+  onOpenMobileSearch?: () => void;
+}) {
+  const navigate = useNavigate();
+  const { searchTerm, setSearchTerm, setIsSearchOpen } = useSearchContext();
+
+  const submit = (event?: FormEvent) => {
+    if (event) event.preventDefault();
+    const term = searchTerm.trim();
+    if (!term) return;
+    navigate({ to: "/buscar", search: { q: term } });
+    setIsSearchOpen(false);
+  };
+
+  return (
+    <form onSubmit={submit} role="search" className={cn("w-full", className)}>
       <label className="relative block">
         <span className="sr-only">Buscar noticias</span>
         <input
-          value={q}
-          onChange={(e) => setQ(e.target.value.slice(0, 100))}
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))}
+          onFocus={() => {
+            if (typeof window !== "undefined" && window.innerWidth < 768) {
+              if (onOpenMobileSearch) {
+                onOpenMobileSearch();
+              }
+              setIsSearchOpen(true);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              submit();
+            }
+          }}
           placeholder="Buscar en QAP ChacoNews…"
           className="h-11 w-full rounded-full border bg-secondary pl-5 pr-11 text-sm outline-none transition focus:border-primary focus:bg-card"
         />
@@ -583,9 +770,11 @@ function SearchBox({ className }: { className?: string }) {
 export function SiteHeader() {
   const today = useToday();
   const { data: cats } = useCategories();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <>
+      <SearchModal />
       <div className="hidden bg-navy text-navy-foreground md:flex">
         <div className="mx-auto flex h-auto min-h-10 max-w-7xl flex-wrap items-center gap-3 px-4 py-2 sm:px-6">
           <span className="shrink-0 text-[11px] text-navy-muted sm:text-xs">{today}</span>
@@ -634,10 +823,11 @@ export function SiteHeader() {
 
           <div className="flex items-center justify-between gap-2 md:hidden">
             <div className="flex items-center gap-2">
-              <Sheet>
+              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger
                   aria-label="Abrir menú"
                   className="grid h-10 w-10 place-items-center rounded-full hover:bg-secondary"
+                  onClick={() => setMobileMenuOpen(true)}
                 >
                   <Menu className="h-5 w-5" />
                 </SheetTrigger>
@@ -645,7 +835,7 @@ export function SiteHeader() {
                   <SheetTitle className="sr-only">Menú</SheetTitle>
                   <Logo className="h-12" />
                   <DrawerAuth />
-                  <SearchBox className="mt-6 text-foreground" />
+                  <SearchBox className="mt-6 text-foreground" onOpenMobileSearch={() => setMobileMenuOpen(false)} />
                   <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-3">
                     <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-navy-muted">
                       Acciones rápidas

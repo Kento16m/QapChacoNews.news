@@ -263,17 +263,43 @@ export const searchArticles = async (term: string, page = 1, pageSize = 12): Pro
   const from = pageIndex * pageSize;
   const to = from + pageSize - 1;
 
-  if (!query) {
-    return { items: [], total: 0, page, pageSize };
-  }
-
-  const escaped = escapeLikeValue(query);
-  const { data, error, count } = await client
+  const baseQuery = client
     .from("articles")
     .select("id, title, slug, subtitle, excerpt, cover_image_url, is_featured, is_breaking, reading_time_minutes, seo_title, seo_description, views_count, published_at, category:categories(id,name,slug,color,sort_order), author:profiles(full_name,avatar_url), tags:article_tags(tag:tags(id,name,slug))", { count: "exact" })
     .eq("status", "published")
-    .lte("published_at", new Date().toISOString())
-    .or(`title.ilike.%${escaped}%,subtitle.ilike.%${escaped}%,excerpt.ilike.%${escaped}%`)
+    .lte("published_at", new Date().toISOString());
+
+  if (!query) {
+    const { data, error, count } = await baseQuery
+      .order("published_at", { ascending: false })
+      .range(from, to);
+
+    handleSupabaseError(error);
+    return {
+      items: (data ?? []).map(mapRow),
+      total: count ?? 0,
+      page,
+      pageSize,
+    };
+  }
+
+  const escaped = escapeLikeValue(query);
+  const { data: categoryMatches, error: categoryError } = await client
+    .from("categories")
+    .select("id")
+    .ilike("name", `%${escaped}%`);
+
+  handleSupabaseError(categoryError);
+
+  const categoryIds = [...new Set((categoryMatches ?? []).map((row) => row.id).filter(Boolean))];
+
+  let queryBuilder = baseQuery.or(`title.ilike.%${escaped}%,subtitle.ilike.%${escaped}%,excerpt.ilike.%${escaped}%`);
+
+  if (categoryIds.length > 0) {
+    queryBuilder = queryBuilder.in("category_id", categoryIds);
+  }
+
+  const { data, error, count } = await queryBuilder
     .order("published_at", { ascending: false })
     .range(from, to);
 
