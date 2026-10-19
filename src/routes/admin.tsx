@@ -728,11 +728,12 @@ function AdminPage() {
     const selected = textarea.value.slice(start, end) || "texto";
     const tag = format === "bold" ? "<strong>" : "<em>";
     const closingTag = format === "bold" ? "</strong>" : "</em>";
-    const nextValue = `${textarea.value.slice(0, start)}${tag}${selected}${closingTag}${textarea.value.slice(end)}`;
+    const formattedValue = `\n\n${tag}${selected}${closingTag}\n\n`;
+    const nextValue = `${textarea.value.slice(0, start)}${formattedValue}${textarea.value.slice(end)}`;
 
     const nextSelection = {
-      start: start + tag.length,
-      end: start + tag.length + selected.length,
+      start: start + tag.length + 2,
+      end: start + tag.length + 2 + selected.length,
     };
 
     contentSelectionRef.current = nextSelection;
@@ -760,7 +761,7 @@ function AdminPage() {
       return;
     }
 
-    const videoMarkup = `\n\n<div class="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">\n  <iframe src="${normalizedUrl}" title="Video del artículo" class="aspect-video w-full" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>\n</div>\n\n`;
+    const videoMarkup = `\n\n<div class="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">\n  <div class="aspect-video w-full overflow-hidden rounded-3xl">\n    <iframe src="${normalizedUrl}" title="Video del artículo" class="h-full w-full border-0" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>\n  </div>\n</div>\n\n`;
     insertMarkupBlock(videoMarkup);
   };
 
@@ -781,7 +782,7 @@ function AdminPage() {
           const mimeType = fileName.toLowerCase();
           const isVideo = /\.(mp4|webm|ogg|mov|m4v)$/i.test(mimeType) || mimeType.includes("video");
           if (isVideo) {
-            return `\n\n<div class="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">\n  <video src="${url}" controls class="aspect-video w-full object-cover" preload="metadata"></video>\n</div>\n\n`;
+            return `\n\n<div class="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">\n  <div class="aspect-video w-full overflow-hidden rounded-3xl">\n    <video src="${url}" controls class="h-full w-full object-cover" preload="metadata"></video>\n  </div>\n</div>\n\n`;
           }
           return `\n\n<figure class="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">\n  <img src="${url}" alt="Imagen dentro del artículo" class="w-full rounded-3xl object-cover" />\n</figure>\n\n`;
         })

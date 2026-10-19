@@ -85,20 +85,32 @@ function normalizeArticleContent(html: string) {
   const trimmed = html.trim();
   if (!trimmed) return "";
 
-  const normalized = trimmed.replace(/\r\n/g, "\n");
+  const normalized = trimmed.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n");
   const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(normalized);
-  const hasInlineFormatting = /<\/?(?:strong|b|em|i|u|s|span|a|mark|code)>/i.test(normalized);
-  const hasBlockElement =
-    /<\/?(?:p|div|h[1-6]|ul|ol|li|blockquote|figure|table|pre|section|article|iframe|img)>/i.test(
-      normalized,
-    );
+  const blockTagPattern = /<\/?(?:p|div|h[1-6]|ul|ol|li|blockquote|figure|table|pre|section|article|iframe|img|video)\b/i;
+
+  const wrapInlineText = (value: string) => {
+    const cleanValue = value.trim();
+    if (!cleanValue) return "";
+
+    const lines = cleanValue
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length > 0) {
+      return lines.map((line) => `<p>${line}</p>`).join("");
+    }
+
+    return `<p>${cleanValue}</p>`;
+  };
 
   if (!looksLikeHtml) {
     return normalized
       .split(/\n{2,}/)
       .map((block) => block.trim())
       .filter(Boolean)
-      .map((block) => `<p>${block.replace(/\n+/g, " ")}</p>`)
+      .map((block) => wrapInlineText(block))
       .join("");
   }
 
@@ -107,37 +119,33 @@ function normalizeArticleContent(html: string) {
     .map((block) => block.trim())
     .filter(Boolean);
 
-  if (blocks.length > 1) {
-    return blocks
-      .map((block) => {
-        const innerBlocks = block
-          .split(/\n+/)
-          .map((segment) => segment.trim())
-          .filter(Boolean);
+  if (blocks.length === 0) return "";
 
-        if (innerBlocks.length > 1 && !hasBlockElement) {
-          return innerBlocks.map((segment) => `<p>${segment}</p>`).join("");
-        }
+  return blocks
+    .map((block) => {
+      if (!blockTagPattern.test(block)) {
+        return wrapInlineText(block);
+      }
 
-        return hasBlockElement ? block : `<p>${block.replace(/\n+/g, " ")}</p>`;
-      })
-      .join("");
-  }
+      const parts = block.split(
+        /(<\/?(?:figure|iframe|video|img|div|p|h[1-6]|ul|ol|li|blockquote|table|pre|section|article)\b[^>]*>[\s\S]*?<\/?(?:figure|iframe|video|img|div|p|h[1-6]|ul|ol|li|blockquote|table|pre|section|article)>)/i,
+      );
 
-  if (hasInlineFormatting && !hasBlockElement) {
-    const segments = normalized
-      .split(/\n+/)
-      .map((segment) => segment.trim())
-      .filter(Boolean);
+      if (parts.length <= 1) {
+        return block;
+      }
 
-    if (segments.length > 1) {
-      return segments.map((segment) => `<p>${segment}</p>`).join("");
-    }
-  }
-
-  if (hasBlockElement) return normalized;
-
-  return `<p>${normalized.replace(/\n+/g, " ")}</p>`;
+      return parts
+        .map((part) => {
+          if (!part) return "";
+          if (/^<\/?(?:figure|iframe|video|img|div|p|h[1-6]|ul|ol|li|blockquote|table|pre|section|article)\b/i.test(part)) {
+            return part;
+          }
+          return wrapInlineText(part);
+        })
+        .join("");
+    })
+    .join("");
 }
 
 function SafeHtml({ html }: { html: string }) {
@@ -147,7 +155,7 @@ function SafeHtml({ html }: { html: string }) {
     const normalized = normalizeArticleContent(html);
     const sanitized = DOMPurify.sanitize(normalized, {
       ADD_TAGS: ["iframe", "figure", "figcaption", "video"],
-      ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "loading", "referrerpolicy", "playsinline"],
+      ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "loading", "referrerpolicy", "playsinline", "webkitallowfullscreen", "mozallowfullscreen"],
       ALLOWED_URI_REGEXP:
         /^(?:(?:(?:f|ht)tps?|mailto|tel|data):|[^a-z]|[\w\-._~!$&'()*+,;=:@/?%#\[\]\\]*$)/i,
     });
