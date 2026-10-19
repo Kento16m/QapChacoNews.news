@@ -11,9 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AvisoLegalRouteImport } from './routes/aviso-legal'
 import { Route as BuscarRouteImport } from './routes/buscar'
+import { Route as CookiesRouteImport } from './routes/cookies'
 import { Route as PerfilRouteImport } from './routes/perfil'
+import { Route as PoliticaDePrivacidadRouteImport } from './routes/politica-de-privacidad'
+import { Route as QuienesSomosRouteImport } from './routes/quienes-somos'
 import { Route as RestablecerContrasenaRouteImport } from './routes/restablecer-contrasena'
+import { Route as TerminosYCondicionesRouteImport } from './routes/terminos-y-condiciones'
 import { Route as CategoriaSlugRouteImport } from './routes/categoria.$slug'
 import { Route as EtiquetaSlugRouteImport } from './routes/etiqueta.$slug'
 import { Route as NoticiaSlugRouteImport } from './routes/noticia.$slug'
@@ -28,9 +33,19 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AvisoLegalRoute = AvisoLegalRouteImport.update({
+  id: '/aviso-legal',
+  path: '/aviso-legal',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BuscarRoute = BuscarRouteImport.update({
   id: '/buscar',
   path: '/buscar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CookiesRoute = CookiesRouteImport.update({
+  id: '/cookies',
+  path: '/cookies',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PerfilRoute = PerfilRouteImport.update({
@@ -38,9 +53,24 @@ const PerfilRoute = PerfilRouteImport.update({
   path: '/perfil',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PoliticaDePrivacidadRoute = PoliticaDePrivacidadRouteImport.update({
+  id: '/politica-de-privacidad',
+  path: '/politica-de-privacidad',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuienesSomosRoute = QuienesSomosRouteImport.update({
+  id: '/quienes-somos',
+  path: '/quienes-somos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RestablecerContrasenaRoute = RestablecerContrasenaRouteImport.update({
   id: '/restablecer-contrasena',
   path: '/restablecer-contrasena',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TerminosYCondicionesRoute = TerminosYCondicionesRouteImport.update({
+  id: '/terminos-y-condiciones',
+  path: '/terminos-y-condiciones',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CategoriaSlugRoute = CategoriaSlugRouteImport.update({
@@ -62,9 +92,14 @@ const NoticiaSlugRoute = NoticiaSlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/aviso-legal': typeof AvisoLegalRoute
   '/buscar': typeof BuscarRoute
+  '/cookies': typeof CookiesRoute
   '/perfil': typeof PerfilRoute
+  '/politica-de-privacidad': typeof PoliticaDePrivacidadRoute
+  '/quienes-somos': typeof QuienesSomosRoute
   '/restablecer-contrasena': typeof RestablecerContrasenaRoute
+  '/terminos-y-condiciones': typeof TerminosYCondicionesRoute
   '/categoria/$slug': typeof CategoriaSlugRoute
   '/etiqueta/$slug': typeof EtiquetaSlugRoute
   '/noticia/$slug': typeof NoticiaSlugRoute
@@ -72,9 +107,14 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/aviso-legal': typeof AvisoLegalRoute
   '/buscar': typeof BuscarRoute
+  '/cookies': typeof CookiesRoute
   '/perfil': typeof PerfilRoute
+  '/politica-de-privacidad': typeof PoliticaDePrivacidadRoute
+  '/quienes-somos': typeof QuienesSomosRoute
   '/restablecer-contrasena': typeof RestablecerContrasenaRoute
+  '/terminos-y-condiciones': typeof TerminosYCondicionesRoute
   '/categoria/$slug': typeof CategoriaSlugRoute
   '/etiqueta/$slug': typeof EtiquetaSlugRoute
   '/noticia/$slug': typeof NoticiaSlugRoute
@@ -83,9 +123,14 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/aviso-legal': typeof AvisoLegalRoute
   '/buscar': typeof BuscarRoute
+  '/cookies': typeof CookiesRoute
   '/perfil': typeof PerfilRoute
+  '/politica-de-privacidad': typeof PoliticaDePrivacidadRoute
+  '/quienes-somos': typeof QuienesSomosRoute
   '/restablecer-contrasena': typeof RestablecerContrasenaRoute
+  '/terminos-y-condiciones': typeof TerminosYCondicionesRoute
   '/categoria/$slug': typeof CategoriaSlugRoute
   '/etiqueta/$slug': typeof EtiquetaSlugRoute
   '/noticia/$slug': typeof NoticiaSlugRoute
@@ -95,9 +140,14 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/aviso-legal'
     | '/buscar'
+    | '/cookies'
     | '/perfil'
+    | '/politica-de-privacidad'
+    | '/quienes-somos'
     | '/restablecer-contrasena'
+    | '/terminos-y-condiciones'
     | '/categoria/$slug'
     | '/etiqueta/$slug'
     | '/noticia/$slug'
@@ -105,9 +155,14 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/admin'
+    | '/aviso-legal'
     | '/buscar'
+    | '/cookies'
     | '/perfil'
+    | '/politica-de-privacidad'
+    | '/quienes-somos'
     | '/restablecer-contrasena'
+    | '/terminos-y-condiciones'
     | '/categoria/$slug'
     | '/etiqueta/$slug'
     | '/noticia/$slug'
@@ -115,9 +170,14 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/aviso-legal'
     | '/buscar'
+    | '/cookies'
     | '/perfil'
+    | '/politica-de-privacidad'
+    | '/quienes-somos'
     | '/restablecer-contrasena'
+    | '/terminos-y-condiciones'
     | '/categoria/$slug'
     | '/etiqueta/$slug'
     | '/noticia/$slug'
@@ -126,9 +186,14 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  AvisoLegalRoute: typeof AvisoLegalRoute
   BuscarRoute: typeof BuscarRoute
+  CookiesRoute: typeof CookiesRoute
   PerfilRoute: typeof PerfilRoute
+  PoliticaDePrivacidadRoute: typeof PoliticaDePrivacidadRoute
+  QuienesSomosRoute: typeof QuienesSomosRoute
   RestablecerContrasenaRoute: typeof RestablecerContrasenaRoute
+  TerminosYCondicionesRoute: typeof TerminosYCondicionesRoute
   CategoriaSlugRoute: typeof CategoriaSlugRoute
   EtiquetaSlugRoute: typeof EtiquetaSlugRoute
   NoticiaSlugRoute: typeof NoticiaSlugRoute
@@ -150,11 +215,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/aviso-legal': {
+      id: '/aviso-legal'
+      path: '/aviso-legal'
+      fullPath: '/aviso-legal'
+      preLoaderRoute: typeof AvisoLegalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/buscar': {
       id: '/buscar'
       path: '/buscar'
       fullPath: '/buscar'
       preLoaderRoute: typeof BuscarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cookies': {
+      id: '/cookies'
+      path: '/cookies'
+      fullPath: '/cookies'
+      preLoaderRoute: typeof CookiesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/perfil': {
@@ -164,11 +243,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PerfilRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/politica-de-privacidad': {
+      id: '/politica-de-privacidad'
+      path: '/politica-de-privacidad'
+      fullPath: '/politica-de-privacidad'
+      preLoaderRoute: typeof PoliticaDePrivacidadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/quienes-somos': {
+      id: '/quienes-somos'
+      path: '/quienes-somos'
+      fullPath: '/quienes-somos'
+      preLoaderRoute: typeof QuienesSomosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/restablecer-contrasena': {
       id: '/restablecer-contrasena'
       path: '/restablecer-contrasena'
       fullPath: '/restablecer-contrasena'
       preLoaderRoute: typeof RestablecerContrasenaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terminos-y-condiciones': {
+      id: '/terminos-y-condiciones'
+      path: '/terminos-y-condiciones'
+      fullPath: '/terminos-y-condiciones'
+      preLoaderRoute: typeof TerminosYCondicionesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/categoria/$slug': {
@@ -198,9 +298,14 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  AvisoLegalRoute: AvisoLegalRoute,
   BuscarRoute: BuscarRoute,
+  CookiesRoute: CookiesRoute,
   PerfilRoute: PerfilRoute,
+  PoliticaDePrivacidadRoute: PoliticaDePrivacidadRoute,
+  QuienesSomosRoute: QuienesSomosRoute,
   RestablecerContrasenaRoute: RestablecerContrasenaRoute,
+  TerminosYCondicionesRoute: TerminosYCondicionesRoute,
   CategoriaSlugRoute: CategoriaSlugRoute,
   EtiquetaSlugRoute: EtiquetaSlugRoute,
   NoticiaSlugRoute: NoticiaSlugRoute,
