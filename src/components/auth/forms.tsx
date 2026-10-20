@@ -101,7 +101,27 @@ export function RegisterForm() {
           <Controller control={control} name="terms" render={({ field }) => (
             <label className="flex cursor-pointer items-start gap-3 text-sm">
               <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} aria-invalid={!!errors.terms} className="mt-0.5" />
-              <span className="text-muted-foreground">Acepto los <a href="#" className="font-semibold text-primary hover:underline">Términos de uso</a> y la <a href="#" className="font-semibold text-primary hover:underline">Política de privacidad</a>.</span>
+              <span className="text-muted-foreground">
+                Acepto los{' '}
+                <a
+                  href="/terminos-y-condiciones"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="font-semibold text-primary hover:underline"
+                >
+                  Términos de uso
+                </a>{' '}
+                y la{' '}
+                <a
+                  href="/politica-de-privacidad"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="font-semibold text-primary hover:underline"
+                >
+                  Política de privacidad
+                </a>
+                .
+              </span>
             </label>
           )} />
           {errors.terms && <p role="alert" className="mt-1.5 text-xs font-medium text-destructive">{errors.terms.message}</p>}

@@ -1,15 +1,48 @@
 import { Link } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { Category } from "@/types";
 
-export function Logo({ className }: { className?: string }) {
+export function Logo({
+  className,
+  variant = "auto",
+}: {
+  className?: string;
+  variant?: "auto" | "dark" | "light";
+}) {
   const [failed, setFailed] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() =>
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
+  );
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const updateTheme = () => {
+      setIsDarkMode(document.documentElement.classList.contains("dark"));
+    };
+
+    updateTheme();
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const resolvedVariant =
+    variant === "auto" ? (isDarkMode ? "dark" : "light") : variant;
+
+  const src = resolvedVariant === "dark" ? "/logo%201.png" : "/logo%202.png";
 
   if (failed) {
     return (
-      <div className={cn("flex items-center justify-center rounded-md bg-primary/10 px-3 py-2 text-sm font-black tracking-[0.2em] text-primary", className)}>
+      <div
+        className={cn(
+          "flex items-center justify-center rounded-md bg-transparent px-1 py-1 text-sm font-black tracking-[0.2em] text-primary",
+          className,
+        )}
+      >
         QAP
       </div>
     );
@@ -17,7 +50,7 @@ export function Logo({ className }: { className?: string }) {
 
   return (
     <img
-      src="/logo.png"
+      src={src}
       alt="QAP ChacoNews"
       loading="eager"
       onError={() => setFailed(true)}

@@ -20,7 +20,7 @@ export function SiteFooter() {
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-10 lg:grid-cols-[1fr_2.1fr] lg:gap-16">
           <div className="max-w-xs">
-            <Logo className="h-16" />
+            <Logo className="h-16" variant="dark" />
             <p className="mt-5 text-sm leading-6 text-navy-muted">
               El medio digital del Chaco paraguayo. Noticias de Filadelfia, Loma Plata,
               Mariscal Estigarribia y todo el país, las 24 horas.

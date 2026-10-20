@@ -509,6 +509,7 @@ function AdminPage() {
   >("all");
   const [accessVisibleCount, setAccessVisibleCount] = useState(10);
   const [selectedAccessLogId, setSelectedAccessLogId] = useState<number | null>(null);
+  const accessTableRef = useRef<HTMLDivElement | null>(null);
   const [accessBanReason, setAccessBanReason] = useState("");
   const [accessBanCloseSessions, setAccessBanCloseSessions] = useState(true);
   const [showAccessBanModal, setShowAccessBanModal] = useState(false);
@@ -694,6 +695,30 @@ function AdminPage() {
         : (adminAccessLogs[0] ?? null),
     [adminAccessLogs, selectedAccessLogId],
   );
+
+  const handleLoadMoreAccessLogs = () => {
+    const previousCount = accessVisibleCount;
+    setAccessVisibleCount((count) => count + 10);
+
+    requestAnimationFrame(() => {
+      const tableContainer = accessTableRef.current;
+      if (!tableContainer) return;
+
+      const targetScroll = Math.max(tableContainer.scrollHeight - tableContainer.clientHeight, 0);
+      tableContainer.scrollTo({ top: targetScroll, behavior: "smooth" });
+
+      if (previousCount > 0) {
+        setTimeout(() => {
+          const nextTableContainer = accessTableRef.current;
+          if (!nextTableContainer) return;
+          nextTableContainer.scrollTo({
+            top: Math.max(nextTableContainer.scrollHeight - nextTableContainer.clientHeight, 0),
+            behavior: "auto",
+          });
+        }, 180);
+      }
+    });
+  };
 
   const { data: articleComments = [], isLoading: articleCommentsLoading } = useQuery({
     queryKey: ["admin", "article-comments", managementArticleId],
@@ -2039,9 +2064,12 @@ function AdminPage() {
                   </select>
                 </div>
 
-                <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-                  <div className="overflow-hidden rounded-2xl border bg-background">
-                    <div className="max-h-[60vh] overflow-y-auto">
+                <div className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr] xl:items-start">
+                  <div className="flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border bg-background">
+                    <div
+                      ref={accessTableRef}
+                      className="max-h-[68vh] min-h-[18rem] overflow-y-auto overscroll-contain"
+                    >
                       <div className="overflow-x-auto">
                         <table className="min-w-full text-left text-sm">
                           <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600 shadow-sm">
@@ -2132,11 +2160,11 @@ function AdminPage() {
                     </div>
 
                     {hasMoreAccessLogs && (
-                      <div className="sticky bottom-0 z-20 border-t border-slate-200 bg-slate-50/95 p-3 text-center backdrop-blur-sm">
+                      <div className="sticky bottom-0 z-20 border-t border-slate-200 bg-slate-50/95 p-2 text-center backdrop-blur-sm">
                         <button
                           type="button"
-                          onClick={() => setAccessVisibleCount((count) => count + 10)}
-                          className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                          onClick={handleLoadMoreAccessLogs}
+                          className="w-full rounded-full bg-slate-900 px-3.5 py-2 text-[11px] font-semibold text-white transition hover:bg-slate-800"
                         >
                           Cargar más
                         </button>
@@ -2147,11 +2175,24 @@ function AdminPage() {
                   <div className="rounded-2xl border bg-background p-4">
                     {selectedAccessLog ? (
                       <div className="space-y-4">
-                        <div>
+                        <div className="flex flex-col items-center justify-center pb-2 text-center">
                           <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
                             Detalle
                           </p>
-                          <h3 className="mt-2 text-xl font-black text-slate-900">
+                          <div className="mt-3">
+                            <UserAvatar
+                              name={
+                                selectedAccessLog.full_name ||
+                                selectedAccessLog.email ||
+                                "Usuario"
+                              }
+                              avatarUrl={targetUserAccess?.avatar_url ?? null}
+                              sizeClass="h-20 w-20"
+                              textClass="text-xl"
+                              fallbackBg="bg-slate-900 text-white"
+                            />
+                          </div>
+                          <h3 className="mt-3 text-center text-xl font-black text-slate-900">
                             {selectedAccessLog.full_name || "Acceso sin nombre"}
                           </h3>
                         </div>

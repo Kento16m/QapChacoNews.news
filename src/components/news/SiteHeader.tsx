@@ -820,9 +820,9 @@ export function SiteHeader() {
                 type="button"
                 onClick={goHome}
                 aria-label="QAP ChacoNews, inicio"
-                className="inline-flex rounded-xl bg-navy px-3 py-1.5"
+                className="inline-flex items-center rounded-xl bg-transparent p-0"
               >
-                <Logo className="h-9" />
+                <Logo className="h-9" variant="auto" />
               </button>
             </div>
 
@@ -847,7 +847,7 @@ export function SiteHeader() {
                 </SheetTrigger>
                 <SheetContent side="left" className="w-80 bg-navy text-navy-foreground">
                   <SheetTitle className="sr-only">Menú</SheetTitle>
-                  <Logo className="h-12" />
+                  <Logo className="h-12" variant="auto" />
                   <DrawerAuth />
                   <SearchBox className="mt-6 text-foreground" onOpenMobileSearch={() => setMobileMenuOpen(false)} />
                   <div className="mt-6 space-y-3">
