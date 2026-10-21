@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   useArticlesByCategory, useCategories, useFeaturedArticle, useLatestArticles, useMostRead, useSubscribe,
 } from "@/hooks/use-news";
+import { trackCategoryView, trackNewsletterSignup } from "@/lib/analytics";
 import type { Category } from "@/types";
 import { ArticleCard } from "./ArticleCard";
 import { CardSkeleton, CategoryBadge, CoverImage, SectionTitle, StateMessage, timeAgo } from "./primitives";
@@ -117,7 +118,7 @@ function CategoryBlock({ category }: { category: Category }) {
   const { data, isLoading, isError } = useArticlesByCategory(category.slug, 1, 3);
   return (
     <section className="reveal">
-      <SectionTitle action={<Link to="/categoria/$slug" params={{ slug: category.slug }} className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">Ver todo <ArrowRight className="h-3.5 w-3.5" /></Link>}>
+      <SectionTitle action={<Link to="/categoria/$slug" params={{ slug: category.slug }} onClick={() => trackCategoryView(category.name, "homepage_section")} className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">Ver todo <ArrowRight className="h-3.5 w-3.5" /></Link>}>
         {category.name}
       </SectionTitle>
       {isError ? <StateMessage error>Error al cargar.</StateMessage>
@@ -149,7 +150,11 @@ export function Newsletter() {
     const parsed = emailSchema.safeParse(email);
     if (!parsed.success) { toast.error("Ingresá un correo electrónico válido."); return; }
     sub.mutate(parsed.data, {
-      onSuccess: () => { toast.success("¡Listo! Te suscribiste a QAP ChacoNews."); setEmail(""); },
+      onSuccess: () => {
+        trackNewsletterSignup("homepage");
+        toast.success("¡Listo! Te suscribiste a QAP ChacoNews.");
+        setEmail("");
+      },
       onError: () => toast.error("No pudimos suscribirte. Intentá de nuevo."),
     });
   };

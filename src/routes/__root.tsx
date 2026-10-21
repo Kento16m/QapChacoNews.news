@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { trackPageView } from "@/lib/analytics";
 import { SiteHeader } from "@/components/news/SiteHeader";
 import { SiteFooter } from "@/components/news/SiteFooter";
 import { Toaster } from "@/components/ui/sonner";
@@ -133,6 +134,10 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith("/admin");
+
+  useEffect(() => {
+    trackPageView(location.pathname, location.search, document.title || "QAP ChacoNews");
+  }, [location.pathname, location.search]);
 
   return (
     <QueryClientProvider client={queryClient}>

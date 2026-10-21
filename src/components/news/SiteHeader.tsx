@@ -13,6 +13,7 @@ import { SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { searchArticles } from "@/lib/api";
 import { useSearchContext } from "@/contexts/SearchContext";
+import { trackCategoryView, trackMobileSearchOpen, trackSearch, trackSearchResultClick } from "@/lib/analytics";
 import {
   Dialog,
   DialogClose,
@@ -602,6 +603,7 @@ function SearchModal() {
   const handleSubmit = (event?: FormEvent) => {
     if (event) event.preventDefault();
     if (!trimmed) return;
+    trackSearch(trimmed, "mobile", searchQuery.data?.items.length ?? 0);
     navigate({ to: "/buscar", search: { q: trimmed } });
     handleRequestClose();
   };
@@ -669,13 +671,16 @@ function SearchModal() {
                   No se encontraron noticias que coinciden con "{trimmed}".
                 </div>
               ) : (
-                searchQuery.data?.items.map((article) => (
+                searchQuery.data?.items.map((article, index) => (
                   <Link
                     key={article.id}
                     to="/noticia/$slug"
                     params={{ slug: article.slug }}
                     className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 transition hover:bg-muted"
-                    onClick={handleRequestClose}
+                    onClick={() => {
+                      trackSearchResultClick(trimmed, article.title, index + 1, "mobile");
+                      handleRequestClose();
+                    }}
                   >
                     <img
                       src={article.cover_image_url ?? "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=600&q=80"}
@@ -731,6 +736,7 @@ function SearchBox({
     if (event) event.preventDefault();
     const term = searchTerm.trim();
     if (!term) return;
+    trackSearch(term, "desktop", 0);
     navigate({ to: "/buscar", search: { q: term } });
     setIsSearchOpen(false);
   };
@@ -747,6 +753,7 @@ function SearchBox({
               if (onOpenMobileSearch) {
                 onOpenMobileSearch();
               }
+              trackMobileSearchOpen();
               setIsSearchOpen(true);
             }
           }}
@@ -847,7 +854,7 @@ export function SiteHeader() {
                 </SheetTrigger>
                 <SheetContent side="left" className="w-80 bg-navy text-navy-foreground">
                   <SheetTitle className="sr-only">Menú</SheetTitle>
-                  <Logo className="h-12" variant="auto" />
+                  <Logo className="h-12" variant="dark" />
                   <DrawerAuth />
                   <SearchBox className="mt-6 text-foreground" onOpenMobileSearch={() => setMobileMenuOpen(false)} />
                   <div className="mt-6 space-y-3">
@@ -884,6 +891,7 @@ export function SiteHeader() {
                         key={c.id}
                         to="/categoria/$slug"
                         params={{ slug: c.slug }}
+                        onClick={() => trackCategoryView(c.name, "mobile_menu")}
                         className="rounded-xl px-3 py-2.5 font-semibold hover:bg-navy-border"
                       >
                         {c.name}
@@ -896,7 +904,7 @@ export function SiteHeader() {
 
             <div className="flex flex-1 justify-start">
               <button type="button" onClick={goHome} aria-label="QAP ChacoNews, inicio" className="inline-flex">
-                <Logo className="h-9" />
+                <Logo className="h-9" variant="auto" />
               </button>
             </div>
 
@@ -923,6 +931,7 @@ export function SiteHeader() {
               key={c.id}
               to="/categoria/$slug"
               params={{ slug: c.slug }}
+              onClick={() => trackCategoryView(c.name, "header_nav")}
               className="whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground data-[status=active]:bg-primary data-[status=active]:text-primary-foreground"
             >
               {c.name}

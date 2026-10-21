@@ -18,6 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { trackArticlePublished } from "@/lib/analytics";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useCategories } from "@/hooks/use-news";
@@ -1289,7 +1290,7 @@ function AdminPage() {
       await syncArticleTags(updated.id, form.tag_ids);
       return updated;
     },
-    onSuccess: async () => {
+    onSuccess: async (savedArticle) => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "articles"] });
       await queryClient.invalidateQueries({ queryKey: ["latest"] });
       await queryClient.invalidateQueries({ queryKey: ["featured"] });
@@ -1297,6 +1298,10 @@ function AdminPage() {
       await queryClient.invalidateQueries({ queryKey: ["category"] });
       await queryClient.invalidateQueries({ queryKey: ["article"] });
       await queryClient.invalidateQueries({ queryKey: ["categories"] });
+
+      if (savedArticle.status === "published") {
+        trackArticlePublished(savedArticle.title, savedArticle.category?.name ?? null);
+      }
     },
   });
 
@@ -1487,6 +1492,11 @@ function AdminPage() {
         scheduled_at:
           nextStatus === "scheduled" ? (article.scheduled_at ?? new Date().toISOString()) : null,
       });
+
+      if (nextStatus === "published") {
+        trackArticlePublished(article.title, article.category?.name ?? null);
+      }
+
       await queryClient.invalidateQueries({ queryKey: ["admin", "articles"] });
       await queryClient.invalidateQueries({ queryKey: ["latest"] });
       await queryClient.invalidateQueries({ queryKey: ["featured"] });

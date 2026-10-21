@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { trackCategoryView } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import type { Category } from "@/types";
 
@@ -74,6 +75,7 @@ export function CategoryBadge({ category, className }: { category: Category | nu
     <Link
       to="/categoria/$slug"
       params={{ slug: category.slug }}
+      onClick={() => trackCategoryView(category.name, "article_badge")}
       style={{ backgroundColor: category.color ?? undefined }}
       className={cn(
         "relative z-10 inline-flex items-center rounded-full bg-primary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary-foreground",

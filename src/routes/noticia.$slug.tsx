@@ -17,6 +17,7 @@ import {
 } from "@/components/news/primitives";
 import { useArticle, useRelated } from "@/hooks/use-news";
 import { registerArticleView } from "@/lib/api";
+import { trackArticleView } from "@/lib/analytics";
 import type { Article } from "@/types";
 
 export const Route = createFileRoute("/noticia/$slug")({
@@ -245,6 +246,13 @@ function ArticlePage() {
       if (trackedViewRef.current !== a.id) {
         trackedViewRef.current = a.id;
         registerArticleView(a.id);
+        trackArticleView({
+          id: a.id,
+          title: a.title,
+          slug: a.slug,
+          category: a.category,
+          author: a.author,
+        });
       }
     } else if (!isLoading) {
       document.title = "Nota no encontrada — QAP ChacoNews";

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { useSubscribe } from "@/hooks/use-news";
+import { trackArticleShare, trackNewsletterSignup } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 export function ReadingProgress() {
@@ -51,6 +52,7 @@ export function ShareButtons({ title, vertical }: { title: string; vertical?: bo
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(url);
+      trackArticleShare("copy", title, "");
       setCopied(true);
       toast.success("Enlace copiado al portapapeles");
       setTimeout(() => setCopied(false), 2000);
@@ -63,7 +65,20 @@ export function ShareButtons({ title, vertical }: { title: string; vertical?: bo
     <div className={cn("flex gap-2", vertical ? "flex-col" : "flex-row items-center")}>
       <span className={cn("text-[10px] font-bold uppercase tracking-widest text-muted-foreground", vertical ? "mb-1 text-center" : "mr-1")}>Compartir</span>
       {links.map(({ label, href, icon: I }) => (
-        <a key={label} href={href} target="_blank" rel="noreferrer" aria-label={label} className={btn}><I className="h-4 w-4" /></a>
+        <a
+          key={label}
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={label}
+          className={btn}
+          onClick={() => {
+            const platform = label.includes("WhatsApp") ? "whatsapp" : label.includes("Facebook") ? "facebook" : "x";
+            trackArticleShare(platform, title, "");
+          }}
+        >
+          <I className="h-4 w-4" />
+        </a>
       ))}
       <button type="button" onClick={copy} aria-label="Copiar enlace" className={btn}>
         {copied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
@@ -81,7 +96,13 @@ export function NewsletterCompact() {
     e.preventDefault();
     const parsed = emailSchema.safeParse(email);
     if (!parsed.success) { toast.error("Ingresá un correo electrónico válido."); return; }
-    sub.mutate(parsed.data, { onSuccess: () => { toast.success("¡Te suscribiste a QAP ChacoNews!"); setEmail(""); } });
+    sub.mutate(parsed.data, {
+      onSuccess: () => {
+        trackNewsletterSignup("article_compact");
+        toast.success("¡Te suscribiste a QAP ChacoNews!");
+        setEmail("");
+      },
+    });
   };
   return (
     <div className="bg-auth-panel rounded-3xl p-6 text-navy-foreground">
