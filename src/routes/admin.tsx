@@ -529,6 +529,7 @@ function AdminPage() {
   const [activeCoverIndex, setActiveCoverIndex] = useState(0);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const contentEditorRef = useRef<HTMLDivElement | null>(null);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const contentSelectionRef = useRef<{ start: number; end: number } | null>(null);
 
@@ -727,43 +728,114 @@ function AdminPage() {
     enabled: canAccess && !!managementArticleId,
   });
 
-  const insertMarkupBlock = (markup: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
+  const removeSelectedMediaBlock = () => {
+    const editor = contentEditorRef.current;
+    if (!editor) return false;
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const prefix = textarea.value.slice(0, start);
-    const suffix = textarea.value.slice(end);
-    const nextValue = `${prefix}${markup}${suffix}`;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return false;
 
-    contentSelectionRef.current = {
-      start: start + markup.length,
-      end: start + markup.length,
+    const range = selection.getRangeAt(0);
+    const findMediaBlock = (node: Node | null): HTMLElement | null => {
+      let current = node;
+      while (current && current !== editor) {
+        if (current instanceof HTMLElement && current.getAttribute("data-media-block") === "true") {
+          return current;
+        }
+        current = current.parentNode;
+      }
+      return null;
     };
 
-    setForm((prev) => ({ ...prev, content: nextValue }));
+    const selectedBlock = findMediaBlock(range.commonAncestorContainer) ?? findMediaBlock(range.startContainer);
+    if (!selectedBlock) {
+      const previousNode = range.startContainer.nodeType === Node.ELEMENT_NODE
+        ? (range.startContainer as Element).previousElementSibling
+        : range.startContainer.parentElement?.previousElementSibling;
+      const nextNode = range.startContainer.nodeType === Node.ELEMENT_NODE
+        ? (range.startContainer as Element).nextElementSibling
+        : range.startContainer.parentElement?.nextElementSibling;
+
+      const adjacentBlock = previousNode?.getAttribute("data-media-block") === "true"
+        ? previousNode
+        : nextNode?.getAttribute("data-media-block") === "true"
+          ? nextNode
+          : null;
+
+      if (!adjacentBlock) return false;
+      adjacentBlock.remove();
+      setForm((prev) => ({ ...prev, content: editor.innerHTML }));
+      return true;
+    }
+
+    selectedBlock.remove();
+    setForm((prev) => ({ ...prev, content: editor.innerHTML }));
+    return true;
+  };
+
+  const insertMarkupBlock = (markup: string) => {
+    const editor = contentEditorRef.current;
+    if (!editor) return;
+    editor.focus();
+    document.execCommand("insertHTML", false, markup);
+    setForm((prev) => ({ ...prev, content: editor.innerHTML }));
   };
 
   const applyTextFormat = (format: "bold" | "italic") => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
+    const editor = contentEditorRef.current;
+    if (!editor) return;
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = textarea.value.slice(start, end) || "texto";
-    const tag = format === "bold" ? "<strong>" : "<em>";
-    const closingTag = format === "bold" ? "</strong>" : "</em>";
-    const formattedValue = `\n\n${tag}${selected}${closingTag}\n\n`;
-    const nextValue = `${textarea.value.slice(0, start)}${formattedValue}${textarea.value.slice(end)}`;
+    editor.focus();
+    document.execCommand(format === "bold" ? "bold" : "italic", false, undefined);
+    setForm((prev) => ({ ...prev, content: editor.innerHTML }));
+  };
 
-    const nextSelection = {
-      start: start + tag.length + 2,
-      end: start + tag.length + 2 + selected.length,
-    };
+  const normalizeVideoEmbedUrl = (rawUrl: string) => {
+    const trimmedUrl = rawUrl.trim();
+    if (!trimmedUrl) return null;
 
-    contentSelectionRef.current = nextSelection;
-    setForm((prev) => ({ ...prev, content: nextValue }));
+    try {
+      const url = new URL(trimmedUrl);
+      const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+      const path = url.pathname.replace(/\/+$/, "");
+
+      if (host === "youtu.be") {
+        const id = path.split("/").filter(Boolean)[0];
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+
+      if (["youtube.com", "m.youtube.com", "music.youtube.com"].includes(host)) {
+        const embedPath = path.match(/^\/embed\/(.+)$/)?.[1];
+        if (embedPath) return `https://www.youtube.com/embed/${embedPath.split(/[/?#]/)[0]}`;
+
+        const shortsId = path.match(/^\/shorts\/(.+)$/)?.[1];
+        if (shortsId) return `https://www.youtube.com/embed/${shortsId.split(/[/?#]/)[0]}`;
+
+        const videoId = url.searchParams.get("v");
+        if (videoId) return `https://www.youtube.com/embed/${videoId}`;
+      }
+
+      if (["youtube-nocookie.com", "www.youtube-nocookie.com"].includes(host)) {
+        const embedPath = path.match(/^\/embed\/(.+)$/)?.[1];
+        if (embedPath) return `https://www.youtube-nocookie.com/embed/${embedPath.split(/[/?#]/)[0]}`;
+      }
+
+      if (["instagram.com", "www.instagram.com"].includes(host)) {
+        const reelId = path.match(/^\/reel\/(.+)$/)?.[1] ?? path.match(/^\/reels\/(.+)$/)?.[1];
+        if (reelId) {
+          const sanitized = reelId.split(/[/?#]/)[0];
+          return `https://www.instagram.com/reel/${sanitized}/embed/`;
+        }
+      }
+
+      if (trimmedUrl.includes("youtube.com/embed/")) return trimmedUrl;
+      if (trimmedUrl.includes("youtube-nocookie.com/embed/")) return trimmedUrl;
+      if (trimmedUrl.includes("instagram.com/reel/")) return trimmedUrl.replace(/\/?$/, "/embed/");
+    } catch {
+      return null;
+    }
+
+    return null;
   };
 
   const insertTextMedia = async (kind: "image" | "video") => {
@@ -777,17 +849,19 @@ function AdminPage() {
     const trimmedUrl = url.trim();
     if (!trimmedUrl) return;
 
-    const normalizedUrl = trimmedUrl.replace(/^https?:\/\/youtu\.be\//i, "https://www.youtube.com/embed/")
-      .replace(/^https?:\/\/www\.youtube\.com\/watch\?v=([A-Za-z0-9_-]+)/i, "https://www.youtube.com/embed/$1")
-      .replace(/^https?:\/\/youtube\.com\/watch\?v=([A-Za-z0-9_-]+)/i, "https://www.youtube.com/embed/$1");
-
     if (kind === "image") {
-      const imageMarkup = `\n\n<figure class="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">\n  <img src="${trimmedUrl}" alt="Imagen dentro del artículo" class="w-full rounded-3xl object-cover" />\n</figure>\n\n`;
+      const imageMarkup = `\n\n<div data-media-block="true" contenteditable="false" class="relative my-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">\n  <button type="button" data-remove-media="true" aria-label="Eliminar imagen" class="absolute right-2 top-2 z-10 grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white/90 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-white">×</button>\n  <figure class="overflow-hidden rounded-2xl">\n    <img src="${trimmedUrl}" alt="Imagen dentro del artículo" class="w-full rounded-2xl object-cover" />\n  </figure>\n</div>\n\n`;
       insertMarkupBlock(imageMarkup);
       return;
     }
 
-    const videoMarkup = `\n\n<div class="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">\n  <div class="aspect-video w-full overflow-hidden rounded-3xl">\n    <iframe src="${normalizedUrl}" title="Video del artículo" class="h-full w-full border-0" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>\n  </div>\n</div>\n\n`;
+    const normalizedUrl = normalizeVideoEmbedUrl(trimmedUrl);
+    if (!normalizedUrl) {
+      window.alert("URL de video inválida. Usá un enlace de YouTube o Instagram reel válido.");
+      return;
+    }
+
+    const videoMarkup = `\n\n<div data-media-block="true" contenteditable="false" class="relative my-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">\n  <button type="button" data-remove-media="true" aria-label="Eliminar video" class="absolute right-2 top-2 z-10 grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white/90 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-white">×</button>\n  <div class="aspect-video w-full overflow-hidden rounded-2xl">\n    <iframe src="${normalizedUrl}" title="Video del artículo" class="h-full w-full border-0" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>\n  </div>\n</div>\n\n`;
     insertMarkupBlock(videoMarkup);
   };
 
@@ -808,9 +882,9 @@ function AdminPage() {
           const mimeType = fileName.toLowerCase();
           const isVideo = /\.(mp4|webm|ogg|mov|m4v)$/i.test(mimeType) || mimeType.includes("video");
           if (isVideo) {
-            return `\n\n<div class="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">\n  <div class="aspect-video w-full overflow-hidden rounded-3xl">\n    <video src="${url}" controls class="h-full w-full object-cover" preload="metadata"></video>\n  </div>\n</div>\n\n`;
+            return `\n\n<div data-media-block="true" contenteditable="false" class="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">\n  <div class="aspect-video w-full overflow-hidden rounded-3xl">\n    <video src="${url}" controls class="h-full w-full object-cover" preload="metadata"></video>\n  </div>\n</div>\n\n`;
           }
-          return `\n\n<figure class="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">\n  <img src="${url}" alt="Imagen dentro del artículo" class="w-full rounded-3xl object-cover" />\n</figure>\n\n`;
+          return `\n\n<div data-media-block="true" contenteditable="false" class="my-6 overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">\n  <figure class="overflow-hidden rounded-3xl">\n    <img src="${url}" alt="Imagen dentro del artículo" class="w-full rounded-3xl object-cover" />\n  </figure>\n</div>\n\n`;
         })
         .join("");
 
@@ -824,13 +898,27 @@ function AdminPage() {
   };
 
   useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea || !contentSelectionRef.current) return;
+    const editor = contentEditorRef.current;
+    if (!editor) return;
+    if (editor.innerHTML !== form.content) {
+      editor.innerHTML = form.content || "";
+    }
 
-    const selection = contentSelectionRef.current;
-    textarea.focus();
-    textarea.setSelectionRange(selection.start, selection.end);
-    contentSelectionRef.current = null;
+    const handleEditorClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const removeButton = target?.closest("[data-remove-media]");
+      if (!removeButton || !editor.contains(removeButton)) return;
+
+      const block = removeButton.closest('[data-media-block="true"]');
+      if (block) {
+        event.preventDefault();
+        block.remove();
+        setForm((prev) => ({ ...prev, content: editor.innerHTML }));
+      }
+    };
+
+    editor.addEventListener("click", handleEditorClick);
+    return () => editor.removeEventListener("click", handleEditorClick);
   }, [form.content]);
 
   useEffect(() => {
@@ -2906,22 +2994,26 @@ function AdminPage() {
                         className="hidden"
                         onChange={handleInlineMediaUpload}
                       />
-                      <textarea
-                        ref={textareaRef}
-                        value={form.content}
+                      <div
+                        ref={contentEditorRef}
+                        role="textbox"
+                        aria-label="Contenido del artículo"
+                        tabIndex={0}
+                        suppressContentEditableWarning
+                        contentEditable
                         dir="ltr"
                         style={{ direction: "ltr", textAlign: "left" }}
-                        onChange={(event) => {
-                          const textarea = event.target;
-                          contentSelectionRef.current = {
-                            start: textarea.selectionStart,
-                            end: textarea.selectionEnd,
-                          };
-                          setForm((prev) => ({ ...prev, content: textarea.value }));
+                        onKeyDown={(event) => {
+                          if ((event.key === "Backspace" || event.key === "Delete") && removeSelectedMediaBlock()) {
+                            event.preventDefault();
+                          }
                         }}
-                        rows={12}
-                        className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm leading-7 text-foreground outline-none transition focus:border-primary"
-                        placeholder="Escribí la nota completa…"
+                        onInput={(event) => {
+                          const element = event.currentTarget;
+                          setForm((prev) => ({ ...prev, content: element.innerHTML }));
+                        }}
+                        className="min-h-[260px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm leading-7 text-foreground outline-none transition focus:border-primary empty:before:pointer-events-none empty:before:block empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]"
+                        data-placeholder="Escribí la nota completa…"
                       />
                     </div>
                   </div>

@@ -162,11 +162,30 @@ function normalizeArticleContent(html: string) {
     .join("");
 }
 
+function stripAdminMediaControls(html: string) {
+  if (!html) return "";
+
+  const baseClean = html.replace(/<button\b[^>]*data-remove-media[^>]*>.*?<\/button>/gis, "");
+  if (typeof DOMParser === "undefined") return baseClean;
+
+  const doc = new DOMParser().parseFromString(baseClean, "text/html");
+  doc.querySelectorAll("[data-remove-media]").forEach((node) => node.remove());
+  doc.querySelectorAll("[contenteditable='false']").forEach((node) => node.removeAttribute("contenteditable"));
+  doc.querySelectorAll("[data-media-block='true']").forEach((node) => {
+    const element = node as HTMLElement;
+    if (element.tagName.toLowerCase() === "button") {
+      element.remove();
+    }
+  });
+
+  return doc.body.innerHTML;
+}
+
 function SafeHtml({ html }: { html: string }) {
   const [clean, setClean] = useState("");
 
   useEffect(() => {
-    const normalized = normalizeArticleContent(html);
+    const normalized = stripAdminMediaControls(normalizeArticleContent(html));
     const sanitized = DOMPurify.sanitize(normalized, {
       ADD_TAGS: ["iframe", "figure", "figcaption", "video"],
       ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "loading", "referrerpolicy", "playsinline", "webkitallowfullscreen", "mozallowfullscreen"],
