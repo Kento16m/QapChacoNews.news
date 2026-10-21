@@ -16,33 +16,46 @@ import {
   timeAgo,
 } from "@/components/news/primitives";
 import { useArticle, useRelated } from "@/hooks/use-news";
-import { registerArticleView } from "@/lib/api";
+import { getArticleBySlug, registerArticleView } from "@/lib/api";
 import { trackArticleView } from "@/lib/analytics";
 import type { Article } from "@/types";
 
+const getSiteUrl = () => {
+  if (typeof window !== "undefined" && window.location.origin) {
+    return window.location.origin;
+  }
+
+  return import.meta.env.VITE_APP_URL || "https://qapchaconews.com";
+};
+
 export const Route = createFileRoute("/noticia/$slug")({
-  head: () => ({
-    meta: [
-      { title: "Noticia — QAP ChacoNews" },
-      {
-        name: "description",
-        content: "Leé la nota completa en QAP ChacoNews y seguí la actualidad del Chaco paraguayo.",
-      },
-      { property: "og:title", content: "Noticia — QAP ChacoNews" },
-      {
-        property: "og:description",
-        content: "Leé la nota completa en QAP ChacoNews y seguí la actualidad del Chaco paraguayo.",
-      },
-      { property: "og:type", content: "article" },
-      { property: "og:image", content: "/og-image.svg" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Noticia — QAP ChacoNews" },
-      {
-        name: "twitter:description",
-        content: "Leé la nota completa en QAP ChacoNews y seguí la actualidad del Chaco paraguayo.",
-      },
-    ],
-  }),
+  loader: async ({ params }) => getArticleBySlug(params.slug),
+  head: ({ loaderData }) => {
+    const article = loaderData as Article | null;
+    const siteUrl = getSiteUrl();
+    const title = article ? (article.seo_title ?? article.title) : "Noticia — QAP ChacoNews";
+    const description = article
+      ? (article.seo_description ?? article.excerpt ?? article.subtitle ?? "Leé la nota completa en QAP ChacoNews.")
+      : "Leé la nota completa en QAP ChacoNews y seguí la actualidad del Chaco paraguayo.";
+    const image = article?.cover_image_url ? `${siteUrl}${article.cover_image_url.startsWith("/") ? article.cover_image_url : `/${article.cover_image_url}`}` : `${siteUrl}/og-image.svg`;
+
+    return {
+      meta: [
+        { title: `${title} — QAP ChacoNews` },
+        { name: "description", content: description },
+        { property: "og:title", content: `${title} — QAP ChacoNews` },
+        { property: "og:description", content: description },
+        { property: "og:type", content: "article" },
+        { property: "og:image", content: image },
+        { property: "og:image:alt", content: title },
+        { property: "og:url", content: `${siteUrl}/noticia/${article?.slug ?? ""}` },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: `${title} — QAP ChacoNews` },
+        { name: "twitter:description", content: description },
+        { name: "twitter:image", content: image },
+      ],
+    };
+  },
   component: ArticlePage,
 });
 
