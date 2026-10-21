@@ -240,8 +240,38 @@ function ArticlePage() {
   const trackedViewRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const setMetaTag = (selector: string, attributes: Record<string, string>, content: string) => {
+      let element = document.head.querySelector(selector) as HTMLMetaElement | null;
+      if (!element) {
+        element = document.createElement("meta");
+        Object.entries(attributes).forEach(([key, value]) => element?.setAttribute(key, value));
+        document.head.appendChild(element);
+      }
+      element.setAttribute("content", content);
+    };
+
     if (a) {
-      document.title = `${a.seo_title ?? a.title} — QAP ChacoNews`;
+      const title = `${a.seo_title ?? a.title} — QAP ChacoNews`;
+      const metaDescription = (a.excerpt ?? a.subtitle ?? "Leé la nota completa en QAP ChacoNews.")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 200);
+      const imageUrl = a.cover_image_url || "/og-image.svg";
+      const pageUrl = `${window.location.origin}${window.location.pathname}`;
+
+      document.title = title;
+      setMetaTag('meta[name="description"]', { name: "description" }, metaDescription);
+      setMetaTag('meta[property="og:title"]', { property: "og:title" }, title);
+      setMetaTag('meta[property="og:description"]', { property: "og:description" }, metaDescription);
+      setMetaTag('meta[property="og:type"]', { property: "og:type" }, "article");
+      setMetaTag('meta[property="og:image"]', { property: "og:image" }, imageUrl);
+      setMetaTag('meta[property="og:url"]', { property: "og:url" }, pageUrl);
+      setMetaTag('meta[property="og:site_name"]', { property: "og:site_name" }, "QAP ChacoNews");
+      setMetaTag('meta[name="twitter:card"]', { name: "twitter:card" }, "summary_large_image");
+      setMetaTag('meta[name="twitter:title"]', { name: "twitter:title" }, title);
+      setMetaTag('meta[name="twitter:description"]', { name: "twitter:description" }, metaDescription);
+      setMetaTag('meta[name="twitter:image"]', { name: "twitter:image" }, imageUrl);
+      setMetaTag('meta[name="twitter:url"]', { name: "twitter:url" }, pageUrl);
 
       if (trackedViewRef.current !== a.id) {
         trackedViewRef.current = a.id;
@@ -256,6 +286,10 @@ function ArticlePage() {
       }
     } else if (!isLoading) {
       document.title = "Nota no encontrada — QAP ChacoNews";
+      setMetaTag('meta[name="description"]', { name: "description" }, "La nota que buscas no existe o fue removida.");
+      setMetaTag('meta[property="og:title"]', { property: "og:title" }, "Nota no encontrada — QAP ChacoNews");
+      setMetaTag('meta[property="og:description"]', { property: "og:description" }, "La nota que buscas no existe o fue removida.");
+      setMetaTag('meta[property="og:image"]', { property: "og:image" }, "/og-image.svg");
     }
   }, [a, isLoading]);
 
