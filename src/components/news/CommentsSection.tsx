@@ -237,6 +237,14 @@ export function CommentsSection({ articleId }: { articleId: string }) {
     setProfiles((current) => ({ ...current, ...nextProfiles }));
   };
 
+  const dedupeComments = (list: CommentRecord[]) => {
+    const byId = new Map<number, CommentRecord>();
+    list.forEach((comment) => {
+      byId.set(comment.id, comment);
+    });
+    return [...byId.values()];
+  };
+
   useEffect(() => {
     if (!supabase || !articleId) return;
 
@@ -264,9 +272,12 @@ export function CommentsSection({ articleId }: { articleId: string }) {
         return;
       }
 
-      const nextComments = (data as CommentRecord[]) ?? [];
+      const nextComments = dedupeComments((data as CommentRecord[]) ?? []);
 
-      setComments((current) => (append ? [...current, ...nextComments] : nextComments));
+      setComments((current) => {
+        const merged = append ? [...current, ...nextComments] : nextComments;
+        return dedupeComments(merged);
+      });
       setHasMore(nextComments.length === PAGE_SIZE);
 
       await hydrateProfilesForComments(nextComments);
@@ -337,6 +348,18 @@ export function CommentsSection({ articleId }: { articleId: string }) {
     setError("");
   };
 
+  const replyCounts = useMemo(() => {
+    const counts = new Map<number, number>();
+
+    comments.forEach((comment) => {
+      if (comment.parent_id !== null) {
+        counts.set(comment.parent_id, (counts.get(comment.parent_id) ?? 0) + 1);
+      }
+    });
+
+    return counts;
+  }, [comments]);
+
   const sortComments = (list: CommentRecord[]) =>
     [...list].sort((a, b) => {
       const aIsOwner = session?.user?.id === a.user_id ? 1 : 0;
@@ -345,7 +368,9 @@ export function CommentsSection({ articleId }: { articleId: string }) {
       if (aIsOwner !== bIsOwner) return bIsOwner - aIsOwner;
 
       if (sortMode === "popular") {
-        if (b.like_count !== a.like_count) return b.like_count - a.like_count;
+        const aScore = a.like_count + (replyCounts.get(a.id) ?? 0) * 2;
+        const bScore = b.like_count + (replyCounts.get(b.id) ?? 0) * 2;
+        if (aScore !== bScore) return bScore - aScore;
       }
 
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -364,11 +389,11 @@ export function CommentsSection({ articleId }: { articleId: string }) {
     return Object.fromEntries(
       Object.entries(grouped).map(([parentId, items]) => [Number(parentId), sortComments(items)])
     );
-  }, [comments, session, sortMode]);
+  }, [comments, session, sortMode, replyCounts]);
 
   const rootComments = useMemo(
     () => sortComments(comments.filter((comment) => comment.parent_id === null)),
-    [comments, session, sortMode]
+    [comments, session, sortMode, replyCounts]
   );
 
   const submitComment = async () => {
@@ -402,7 +427,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
     setError("");
     setComments((current) => {
       const withoutOptimistic = current.filter((item) => item.id !== optimisticComment.id);
-      const next = [optimisticComment, ...withoutOptimistic];
+      const next = dedupeComments([optimisticComment, ...withoutOptimistic]);
       return next.slice(0, Math.max(PAGE_SIZE, current.length + 1));
     });
     setHighlightedCommentId(optimisticComment.id);
@@ -470,13 +495,13 @@ export function CommentsSection({ articleId }: { articleId: string }) {
         setComments((current) => {
           const withoutOptimistic = current.filter((item) => item.id !== optimisticComment.id);
           const existing = withoutOptimistic.some((item) => item.id === insertedComment.id);
-          if (existing) return withoutOptimistic;
-          const next = [insertedComment, ...withoutOptimistic];
+          if (existing) return dedupeComments(withoutOptimistic);
+          const next = dedupeComments([insertedComment, ...withoutOptimistic]);
           return next;
         });
         setHighlightedCommentId(insertedComment.id);
       } else {
-        setComments((current) => current.filter((item) => item.id !== optimisticComment.id));
+        setComments((current) => dedupeComments(current.filter((item) => item.id !== optimisticComment.id)));
       }
 
       setPage(0);
