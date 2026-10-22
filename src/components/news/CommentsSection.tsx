@@ -1,6 +1,16 @@
-import { Component, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
-import { Heart, LogIn, MessageSquare, Reply, Send, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Heart, LogIn, MessageSquare, MoreHorizontal, Reply, Send, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,18 +37,11 @@ type ProfileSummary = {
 const formatDate = (iso: string) =>
   new Intl.DateTimeFormat("es-PY", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 
-const sanitizeText = (value: unknown) => {
-  const normalized = typeof value === "string"
-    ? value
-    : typeof value === "number" || typeof value === "boolean"
-      ? String(value)
-      : "";
-
-  return DOMPurify.sanitize(normalized, {
+const sanitizeText = (value: string) =>
+  DOMPurify.sanitize(value, {
     ALLOWED_TAGS: [],
     ALLOWED_ATTR: [],
   }).trim();
-};
 
 const offensiveContentMessage = "Tu comentario no es apto para esta comunidad. Por favor, elimina palabras ofensivas o contenido inapropiado y vuelve a intentarlo.";
 const rateLimitMessage = "Superaste el límite de mensajes. Por favor, esperá 1 minuto antes de comentar otra vez.";
@@ -154,30 +157,6 @@ const normalizeErrorMessage = (error: unknown): string => {
 
 const PAGE_SIZE = 10;
 
-class CommentsErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  state = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("CommentsSection crashed:", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <section className="mt-12 rounded-3xl border border-dashed border-muted-foreground/30 bg-card p-6 text-sm text-muted-foreground">
-          No se pudieron cargar los comentarios en este momento. Intentá nuevamente más tarde.
-        </section>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-
 export function CommentsSection({ articleId }: { articleId: string }) {
   const { openAuthDialog } = useAuth();
   const [session, setSession] = useState<any>(null);
@@ -194,13 +173,11 @@ export function CommentsSection({ articleId }: { articleId: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [animatedLikes, setAnimatedLikes] = useState<Record<number, boolean>>({});
   const [highlightedCommentId, setHighlightedCommentId] = useState<number | null>(null);
-  const [sortMode, setSortMode] = useState<"popular" | "newest">("popular");
-  const [expandedReplies, setExpandedReplies] = useState<Record<number, boolean>>({});
-  const [closingReplies, setClosingReplies] = useState<Record<number, boolean>>({});
-  const [visibleRepliesCounts, setVisibleRepliesCounts] = useState<Record<number, number>>({});
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
-  const [isDeletingComment, setIsDeletingComment] = useState(false);
-  const [replyComposerClosing, setReplyComposerClosing] = useState(false);
+  const [removingCommentIds, setRemovingCommentIds] = useState<Record<number, boolean>>({});
+  const [expandedReplies, setExpandedReplies] = useState<Record<number, boolean>>({});
+  const [visibleReplyCounts, setVisibleReplyCounts] = useState<Record<number, number>>({});
+  const [sortMode, setSortMode] = useState<"popular" | "newest">("popular");
 
   useEffect(() => {
     if (!supabase) {
@@ -231,23 +208,18 @@ export function CommentsSection({ articleId }: { articleId: string }) {
     return () => window.clearTimeout(timeout);
   }, [highlightedCommentId]);
 
-  const hydrateProfilesForComments = async (commentBatch: CommentRecord[]) => {
-    const uniqueUserIds = [...new Set(commentBatch.map((comment) => comment.user_id))];
-
-    if (uniqueUserIds.length === 0) {
-      return;
-    }
+  const hydrateProfilesForComments = async (commentList: CommentRecord[]) => {
+    const uniqueUserIds = [...new Set(commentList.map((comment) => comment.user_id))];
+    if (uniqueUserIds.length === 0 || !supabase) return;
 
     const { data: profileRows, error: profileError } = await supabase
       .from("profiles")
       .select("id, full_name, avatar_url, profile_color")
       .in("id", uniqueUserIds);
 
-    if (profileError || !profileRows) {
-      return;
-    }
+    if (profileError) return;
 
-    const nextProfiles = profileRows.reduce<Record<string, ProfileSummary>>((acc, profile) => {
+    const nextProfiles = (profileRows ?? []).reduce<Record<string, ProfileSummary>>((acc, profile) => {
       acc[profile.id] = {
         id: profile.id,
         full_name: profile.full_name,
@@ -292,9 +264,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
       setComments((current) => (append ? [...current, ...nextComments] : nextComments));
       setHasMore(nextComments.length === PAGE_SIZE);
 
-      if (nextComments.length > 0) {
-        await hydrateProfilesForComments(nextComments);
-      }
+      await hydrateProfilesForComments(nextComments);
 
       if (pageIndex === 0) {
         setProfiles((current) => {
@@ -354,11 +324,6 @@ export function CommentsSection({ articleId }: { articleId: string }) {
   }, [articleId]);
 
   const handleReply = (commentId: number, authorName?: string) => {
-    if (!Number.isFinite(commentId) || commentId < 0) {
-      return;
-    }
-
-    setReplyComposerClosing(false);
     setReplyTo(commentId);
     setReplyTargetName(authorName || "");
     setDraft("");
@@ -372,7 +337,9 @@ export function CommentsSection({ articleId }: { articleId: string }) {
 
       if (aIsOwner !== bIsOwner) return bIsOwner - aIsOwner;
 
-      if (b.like_count !== a.like_count) return b.like_count - a.like_count;
+      if (sortMode === "popular") {
+        if (b.like_count !== a.like_count) return b.like_count - a.like_count;
+      }
 
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
@@ -390,48 +357,12 @@ export function CommentsSection({ articleId }: { articleId: string }) {
     return Object.fromEntries(
       Object.entries(grouped).map(([parentId, items]) => [Number(parentId), sortComments(items)])
     );
-  }, [comments, session]);
-
-  const sortedRootComments = useMemo(() => {
-    const list = comments.filter((comment) => comment.parent_id === null);
-    if (sortMode === "newest") {
-      return [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    }
-
-    return sortComments(list);
   }, [comments, session, sortMode]);
 
-  const rootComments = sortedRootComments;
-
-  const handleToggleReplies = (commentId: number) => {
-    const isExpanded = Boolean(expandedReplies[commentId]);
-
-    if (isExpanded) {
-      setClosingReplies((current) => ({ ...current, [commentId]: true }));
-      window.setTimeout(() => {
-        setExpandedReplies((current) => ({ ...current, [commentId]: false }));
-        setClosingReplies((current) => ({ ...current, [commentId]: false }));
-      }, 220);
-      return;
-    }
-
-    setExpandedReplies((current) => ({ ...current, [commentId]: true }));
-    setClosingReplies((current) => ({ ...current, [commentId]: false }));
-    setVisibleRepliesCounts((current) => ({
-      ...current,
-      [commentId]: current[commentId] ?? Math.min(commentsByParent[commentId]?.length ?? 0, 8),
-    }));
-  };
-
-  const handleLoadMoreReplies = (commentId: number) => {
-    const totalReplies = commentsByParent[commentId]?.length ?? 0;
-    const currentVisible = visibleRepliesCounts[commentId] ?? Math.min(totalReplies, 8);
-
-    setVisibleRepliesCounts((current) => ({
-      ...current,
-      [commentId]: Math.min(totalReplies, currentVisible + 8),
-    }));
-  };
+  const rootComments = useMemo(
+    () => sortComments(comments.filter((comment) => comment.parent_id === null)),
+    [comments, session, sortMode]
+  );
 
   const submitComment = async () => {
     if (!supabase) {
@@ -439,8 +370,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
       return;
     }
 
-    const currentUser = session?.user;
-    if (!session?.access_token || !currentUser?.id) {
+    if (!session?.access_token || !session?.user?.id) {
       setError("Tu sesión de Supabase está vencida o no está iniciada. Volvé a iniciar sesión para comentar.");
       return;
     }
@@ -451,38 +381,15 @@ export function CommentsSection({ articleId }: { articleId: string }) {
       return;
     }
 
-    const optimisticComment: CommentRecord = {
-      id: Date.now() + Math.floor(Math.random() * 1000),
-      article_id: articleId,
-      user_id: currentUser.id,
-      parent_id: replyTo,
-      body: cleanBody,
-      like_count: 0,
-      created_at: new Date().toISOString(),
-    };
-
     setIsSubmitting(true);
     setError("");
-    setComments((current) => {
-      const next = [optimisticComment, ...current];
-      return next.slice(0, PAGE_SIZE);
-    });
-    setHighlightedCommentId(optimisticComment.id);
-
-    if (replyTo !== null) {
-      setExpandedReplies((current) => ({ ...current, [replyTo]: true }));
-      setVisibleRepliesCounts((current) => ({
-        ...current,
-        [replyTo]: Math.max(current[replyTo] ?? 8, (commentsByParent[replyTo]?.length ?? 0) + 1),
-      }));
-    }
 
     try {
       const { data, error: invokeError } = await supabase.functions.invoke("moderate-comment", {
         body: {
           article_id: articleId,
           parent_id: replyTo,
-          user_id: currentUser.id,
+          user_id: session.user.id,
           body: cleanBody,
         },
       });
@@ -530,43 +437,21 @@ export function CommentsSection({ articleId }: { articleId: string }) {
       const insertedComment = (data as { comment?: CommentRecord })?.comment;
       if (insertedComment) {
         setComments((current) => {
-          const withoutOptimistic = current.filter((item) => item.id !== optimisticComment.id);
-          const existing = withoutOptimistic.some((item) => item.id === insertedComment.id);
-          if (existing) return withoutOptimistic;
-          const next = [insertedComment, ...withoutOptimistic];
+          const existing = current.some((item) => item.id === insertedComment.id);
+          if (existing) return current;
+          const next = [insertedComment, ...current];
           return next.slice(0, PAGE_SIZE);
         });
-
-        if (insertedComment.parent_id !== null) {
-          setExpandedReplies((current) => ({
-            ...current,
-            [insertedComment.parent_id as number]: true,
-          }));
-          setVisibleRepliesCounts((current) => ({
-            ...current,
-            [insertedComment.parent_id as number]: Math.max(
-              current[insertedComment.parent_id as number] ?? 8,
-              (commentsByParent[insertedComment.parent_id as number]?.length ?? 0) + 1
-            ),
-          }));
-        }
-
         setHighlightedCommentId(insertedComment.id);
-      } else {
-        setComments((current) => current.filter((item) => item.id !== optimisticComment.id));
       }
 
       setPage(0);
       setHasMore(true);
       setDraft("");
-      setReplyComposerClosing(true);
-      window.setTimeout(() => {
-        setReplyTo(null);
-        setReplyTargetName("");
-        setReplyComposerClosing(false);
-      }, 180);
+      if (replyTo !== null) {
+        setExpandedReplies((current) => ({ ...current, [replyTo]: true }));
+      }
     } catch (invokeError) {
-      setComments((current) => current.filter((item) => item.id !== optimisticComment.id));
       const message = normalizeErrorMessage(invokeError);
       setError(
         /jwt|unauthorized|401|token/i.test(message)
@@ -584,8 +469,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
       return;
     }
 
-    const currentUser = session?.user;
-    if (!currentUser?.id) {
+    if (!session) {
       setError("Iniciá sesión para dar like.");
       return;
     }
@@ -597,7 +481,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
 
     const { error: likeError } = await supabase.from("comment_likes").insert({
       comment_id: commentId,
-      user_id: currentUser.id,
+      user_id: session.user.id,
     });
 
     if (likeError) {
@@ -620,42 +504,26 @@ export function CommentsSection({ articleId }: { articleId: string }) {
 
   const deleteComment = async (commentId: number) => {
     if (!supabase) return;
-    const currentUser = session?.user;
-    if (!currentUser?.id) return;
+    if (!session) return;
 
-    setIsDeletingComment(true);
-    setError("");
+    setDeleteTargetId(null);
+    setRemovingCommentIds((current) => ({ ...current, [commentId]: true }));
 
-    const { error } = await supabase.from("comments").delete().eq("id", commentId).eq("user_id", currentUser.id);
-
+    const { error } = await supabase.from("comments").delete().eq("id", commentId).eq("user_id", session.user.id);
     if (error) {
+      setRemovingCommentIds((current) => ({ ...current, [commentId]: false }));
       setError("No se pudo eliminar el comentario.");
-      setIsDeletingComment(false);
-      setDeleteTargetId(null);
       return;
     }
 
-    setComments((current) => current.filter((comment) => comment.id !== commentId));
-    setExpandedReplies((current) => {
-      const next = { ...current };
-      delete next[commentId];
-      return next;
-    });
-    setClosingReplies((current) => {
-      const next = { ...current };
-      delete next[commentId];
-      return next;
-    });
-    setVisibleRepliesCounts((current) => {
-      const next = { ...current };
-      delete next[commentId];
-      return next;
-    });
-
     window.setTimeout(() => {
-      setIsDeletingComment(false);
-      setDeleteTargetId(null);
-    }, 180);
+      setComments((current) => current.filter((comment) => comment.id !== commentId));
+      setRemovingCommentIds((current) => {
+        const next = { ...current };
+        delete next[commentId];
+        return next;
+      });
+    }, 240);
   };
 
   if (!supabase) {
@@ -667,651 +535,528 @@ export function CommentsSection({ articleId }: { articleId: string }) {
   }
 
   return (
-    <CommentsErrorBoundary>
+    <>
       <style>{`
-        .comments-shell {
-          border: 1px solid rgba(148, 163, 184, 0.18);
-          background: #f7f7f8;
-          border-radius: 24px;
-          padding: 18px 18px 14px;
-          box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.02);
-        }
-
-        .comments-topbar {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 18px;
-        }
-
-        .comments-title {
-          font-size: 1.1rem;
-          font-weight: 800;
-          letter-spacing: -0.03em;
-          color: #111827;
-        }
-
-        .sort-toggle {
-          display: inline-flex;
-          align-items: center;
-          border: 1px solid rgba(148, 163, 184, 0.6);
-          background: rgba(255, 255, 255, 0.7);
-          border-radius: 999px;
-          padding: 4px;
-          gap: 4px;
-        }
-
-        .sort-button {
-          border: none;
-          background: transparent;
-          border-radius: 999px;
-          padding: 7px 14px;
-          font-size: 0.86rem;
-          font-weight: 600;
-          color: #475569;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .sort-button.active {
-          background: #fff;
-          color: #0f172a;
-          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-        }
-
-        .composer {
-          border: 1px solid rgba(148, 163, 184, 0.35);
-          background: #f3f4f6;
-          border-radius: 18px;
-          padding: 14px 14px 12px 14px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          min-height: 78px;
-        }
-
-        .composer-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          overflow: hidden;
-          flex-shrink: 0;
-          border: 1px solid rgba(148, 163, 184, 0.28);
-          background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
-        }
-
-        .composer-input {
-          flex: 1;
-          background: transparent;
-          border: none;
-          outline: none;
-          color: #0f172a;
-          font-size: 1rem;
-          min-height: 52px;
-        }
-
-        .composer-input::placeholder {
-          color: #64748b;
-        }
-
-        .send-btn {
-          width: 46px;
-          height: 46px;
-          border: none;
-          border-radius: 14px;
-          background: linear-gradient(135deg, #5b47d1, #4f46e5);
-          color: white;
-          display: grid;
-          place-items: center;
-          cursor: pointer;
-          box-shadow: 0 12px 18px rgba(79, 70, 229, 0.20);
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .send-btn:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 16px 22px rgba(79, 70, 229, 0.25);
-        }
-
-        .send-btn:disabled {
-          opacity: 0.65;
-          cursor: not-allowed;
-          transform: none;
-          box-shadow: none;
-        }
-
-        .comment-card {
-          background: rgba(255, 255, 255, 0.9);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 18px;
-          padding: 16px 18px 14px;
-          transition: all 0.2s ease;
-        }
-
-        .comment-card.highlighted {
-          border-color: rgba(79, 70, 229, 0.4);
-          box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.08);
-          animation: commentHighlight 0.46s ease;
-        }
-
-        @keyframes commentHighlight {
-          0% {
-            transform: scale(0.985);
-            box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.18);
-          }
-          35% {
-            transform: scale(1.005);
-            box-shadow: 0 0 0 8px rgba(79, 70, 229, 0.08);
-          }
-          100% {
-            transform: scale(1);
-            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.06);
-          }
-        }
-
-        .comment-header {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 10px;
-        }
-
-        .comment-user {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .comment-user-avatar {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          object-fit: cover;
-          border: 1px solid rgba(148, 163, 184, 0.25);
-          background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
-        }
-
-        .comment-meta {
-          display: flex;
-          flex-direction: column;
-          line-height: 1.2;
-        }
-
-        .comment-author {
-          font-size: 0.94rem;
-          font-weight: 700;
-          color: #111827;
-        }
-
-        .comment-date {
-          font-size: 0.74rem;
-          color: #64748b;
-          margin-top: 2px;
-        }
-
-        .comment-ghost {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border: none;
-          background: transparent;
-          color: #64748b;
-          padding: 0;
-          cursor: pointer;
-        }
-
-        .comment-body {
-          margin-top: 12px;
-          color: #111827;
-          font-size: 1rem;
-          line-height: 1.72;
-          white-space: pre-wrap;
-        }
-
-        .comment-actions {
-          margin-top: 12px;
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          flex-wrap: wrap;
-        }
-
-        .comment-icon-button {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          border: none;
-          background: transparent;
-          font-size: 0.92rem;
-          color: #475569;
-          font-weight: 600;
-          padding: 0;
-          cursor: pointer;
-          transition: transform 0.2s ease, color 0.2s ease;
-        }
-
-        .comment-icon-button:hover {
-          transform: translateY(-1px);
-        }
-
-        .comment-icon-button.like {
-          color: #4b5563;
-        }
-
-        .comment-icon-button.like.is-animating {
-          animation: likePulse 0.35s ease;
-        }
-
-        @keyframes likePulse {
-          0% { transform: scale(1); }
-          25% { transform: scale(1.18); }
-          50% { transform: scale(0.96); }
+        @keyframes heart-pop {
+          0% { transform: scale(0.8); }
+          30% { transform: scale(1.45); }
+          55% { transform: scale(0.95); }
           100% { transform: scale(1); }
         }
 
-        @keyframes sendPulse {
-          0% { transform: scale(1); box-shadow: 0 10px 18px rgba(79, 70, 229, 0.18); }
-          60% { transform: scale(1.08); box-shadow: 0 16px 26px rgba(79, 70, 229, 0.26); }
-          100% { transform: scale(1); box-shadow: 0 12px 20px rgba(79, 70, 229, 0.2); }
+        @keyframes comment-pop {
+          0% { transform: scale(0.96); opacity: 0.7; }
+          35% { transform: scale(1.02); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
         }
 
-        .send-btn.sending {
-          animation: sendPulse 0.7s ease-in-out infinite alternate;
+        @keyframes publish-bounce {
+          0%, 100% { transform: translateY(0) scale(1); }
+          25% { transform: translateY(-2px) scale(1.02); }
+          50% { transform: translateY(-5px) scale(1.05); }
+          75% { transform: translateY(-1px) scale(1.02); }
         }
 
-        .comment-icon-button:focus-visible,
-        .sort-button:focus-visible,
-        .send-btn:focus-visible {
-          outline: 2px solid rgba(79, 70, 229, 0.36);
-          outline-offset: 2px;
+        @keyframes rotate-ring {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
 
-        .replies-toggle {
-          margin-top: 12px;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          font-weight: 700;
-          color: #4f46e5;
-          background: transparent;
+        .button {
+          --primary: #ff5569;
+          --neutral-1: #f7f8f7;
+          --neutral-2: #e7e7e7;
+          --radius: 14px;
+          cursor: pointer;
+          border-radius: var(--radius);
+          text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
           border: none;
-          padding: 0;
-          cursor: pointer;
-        }
-
-        .reply-box {
-          margin-top: 14px;
-          border: 1px solid rgba(148, 163, 184, 0.28);
-          background: rgba(248, 250, 252, 0.9);
-          border-radius: 16px;
-          padding: 12px;
-          animation: replyReveal 0.24s ease;
-          transform-origin: top center;
-        }
-
-        .reply-box.is-closing {
-          animation: replyCollapse 0.22s ease forwards;
-        }
-
-        .reply-label {
-          font-size: 0.74rem;
-          color: #64748b;
-          margin-bottom: 8px;
-          font-weight: 600;
-        }
-
-        .reply-actions {
-          margin-top: 10px;
+          box-shadow: 0 0.5px 0.5px 1px rgba(255, 255, 255, 0.2), 0 10px 20px rgba(0, 0, 0, 0.2), 0 4px 5px 0px rgba(0, 0, 0, 0.05);
           display: flex;
-          justify-content: flex-end;
-          gap: 8px;
-        }
-
-        .reply-cancel,
-        .reply-submit {
-          border-radius: 10px;
-          border: 1px solid rgba(148, 163, 184, 0.45);
-          background: white;
-          color: #0f172a;
-          padding: 8px 12px;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          transition: all 0.3s ease;
+          min-width: 164px;
+          padding: 14px 18px;
+          height: 52px;
+          font-family: "Galano Grotesque", Poppins, Montserrat, sans-serif;
+          font-style: normal;
+          font-size: 17px;
           font-weight: 600;
-          cursor: pointer;
+          background: linear-gradient(var(--neutral-1), var(--neutral-2));
+          color: var(--primary);
+          overflow: hidden;
         }
 
-        .reply-submit {
-          background: #4f46e5;
-          border-color: #4f46e5;
-          color: white;
+        .button:hover {
+          transform: scale(1.02);
+          box-shadow: 0 0 1px 2px rgba(255, 255, 255, 0.3), 0 15px 30px rgba(0, 0, 0, 0.3), 0 10px 3px -3px rgba(0, 0, 0, 0.04);
         }
 
-        .reply-wrapper {
-          margin-top: 12px;
-          border-left: 1px solid rgba(148, 163, 184, 0.3);
-          padding-left: 14px;
-          margin-left: 8px;
-          display: grid;
-          gap: 12px;
-          animation: replyReveal 0.26s ease;
+        .button:active {
+          transform: scale(1);
+          box-shadow: 0 0 1px 2px rgba(255, 255, 255, 0.3), 0 10px 3px -3px rgba(0, 0, 0, 0.2);
         }
 
-        .reply-wrapper.is-closing {
-          animation: replyCollapse 0.22s ease forwards;
-        }
-
-        .comment-card.is-removing {
-          opacity: 0;
-          transform: translateY(-8px) scale(0.98);
-          filter: blur(2px);
-          pointer-events: none;
-          transition: all 0.22s ease;
-        }
-
-        .delete-confirm-overlay {
-          position: fixed;
+        .button:after {
+          content: "";
+          position: absolute;
           inset: 0;
-          background: rgba(15, 23, 42, 0.46);
-          display: grid;
-          place-items: center;
-          z-index: 50;
-          backdrop-filter: blur(2px);
+          border-radius: var(--radius);
+          border: 2.5px solid transparent;
+          background: linear-gradient(var(--neutral-1), var(--neutral-2)) padding-box,
+            linear-gradient(to bottom, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.45)) border-box;
+          z-index: 0;
+          transition: all 0.4s ease;
         }
 
-        .delete-confirm-dialog {
-          width: min(92vw, 420px);
-          background: white;
-          border-radius: 22px;
-          padding: 22px 20px 18px;
-          border: 1px solid rgba(148, 163, 184, 0.3);
-          box-shadow: 0 25px 50px rgba(15, 23, 42, 0.18);
-          animation: dialogReveal 0.22s ease;
+        .button:hover::after {
+          transform: scale(1.04, 1.08);
+          box-shadow: inset 0 -1px 3px 0 rgba(255, 255, 255, 1);
         }
 
-        .delete-confirm-title {
-          font-size: 1.04rem;
-          font-weight: 800;
-          color: #0f172a;
-          margin-bottom: 8px;
+        .button::before {
+          content: "";
+          inset: 7px 6px 6px 6px;
+          position: absolute;
+          background: linear-gradient(to top, var(--neutral-1), var(--neutral-2));
+          border-radius: 30px;
+          filter: blur(0.5px);
+          z-index: 2;
         }
 
-        .delete-confirm-body {
-          color: #475569;
-          font-size: 0.94rem;
-          line-height: 1.5;
-          margin-bottom: 18px;
-        }
 
-        .delete-confirm-actions {
+        .state {
+          padding-left: 29px;
+          z-index: 2;
           display: flex;
-          justify-content: flex-end;
-          gap: 10px;
+          position: relative;
         }
 
-        .delete-confirm-button {
-          border: 1px solid rgba(148, 163, 184, 0.5);
-          background: white;
-          color: #0f172a;
-          border-radius: 12px;
-          padding: 9px 14px;
+        .state p {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0;
+        }
+
+        .state p span {
+          display: block;
+          opacity: 0;
+          animation: slideDown 0.8s ease forwards calc(var(--i) * 0.03s);
           font-weight: 700;
-          cursor: pointer;
+          color: var(--primary);
         }
 
-        .delete-confirm-button.primary {
-          background: linear-gradient(135deg, #ef4444, #dc2626);
-          border-color: transparent;
-          color: white;
+        .button:hover p span {
+          opacity: 1;
+          animation: wave 0.5s ease forwards calc(var(--i) * 0.02s);
         }
 
-        @keyframes replyReveal {
-          from {
+        .button:focus p span {
+          opacity: 1;
+          animation: disapear 0.6s ease forwards calc(var(--i) * 0.03s);
+        }
+
+        .state .icon {
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          margin: auto;
+          transform: scale(1.25);
+          transition: all 0.3s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .state .icon svg {
+          overflow: visible;
+        }
+
+        @keyframes wave {
+          30% {
+            opacity: 1;
+            transform: translateY(4px) translateX(0) rotate(0);
+          }
+          50% {
+            opacity: 1;
+            transform: translateY(-3px) translateX(0) rotate(0);
+            color: var(--primary);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) translateX(0) rotate(0);
+          }
+        }
+
+        @keyframes slideDown {
+          0% {
             opacity: 0;
-            transform: translateY(-8px) scaleY(0.96);
+            transform: translateY(-20px) translateX(5px) rotate(-90deg);
+            color: var(--primary);
+            filter: blur(5px);
+          }
+          30% {
+            opacity: 1;
+            transform: translateY(4px) translateX(0) rotate(0);
+            filter: blur(0);
+          }
+          50% {
+            opacity: 1;
+            transform: translateY(-3px) translateX(0) rotate(0);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) translateX(0) rotate(0);
+          }
+        }
+
+        @keyframes disapear {
+          from {
+            opacity: 1;
           }
           to {
-            opacity: 1;
-            transform: translateY(0) scaleY(1);
+            opacity: 0;
+            transform: translateX(5px) translateY(20px);
+            color: var(--primary);
+            filter: blur(5px);
           }
         }
 
-        @keyframes replyCollapse {
-          from {
+        .state--default .icon svg {
+          animation: land 0.6s ease forwards;
+        }
+
+        .button:hover .state--default .icon {
+          transform: rotate(45deg) scale(1.25);
+        }
+
+        .button:focus .state--default svg {
+          animation: takeOff 0.8s linear forwards;
+        }
+
+        .button:focus .state--default .icon {
+          transform: rotate(0) scale(1.25);
+        }
+
+        @keyframes takeOff {
+          0% {
             opacity: 1;
-            transform: translateY(0);
-            max-height: 4000px;
           }
-          to {
+          60% {
+            opacity: 1;
+            transform: translateX(70px) rotate(45deg) scale(2);
+          }
+          100% {
             opacity: 0;
-            transform: translateY(-8px);
-            max-height: 0;
-            margin-top: 0;
-            overflow: hidden;
+            transform: translateX(160px) rotate(45deg) scale(0);
           }
         }
 
-        @keyframes dialogReveal {
-          from {
+        @keyframes land {
+          0% {
+            transform: translateX(-60px) translateY(30px) rotate(-50deg) scale(2);
             opacity: 0;
-            transform: translateY(8px) scale(0.98);
+            filter: blur(3px);
           }
-          to {
+          100% {
+            transform: translateX(0) translateY(0) rotate(0);
             opacity: 1;
-            transform: translateY(0) scale(1);
+            filter: blur(0);
           }
+        }
+
+        .state--default .icon:before {
+          content: "";
+          position: absolute;
+          top: 50%;
+          height: 2px;
+          width: 0;
+          left: -5px;
+          background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.5));
+        }
+
+        .button:focus .state--default .icon:before {
+          animation: contrail 0.8s linear forwards;
+        }
+
+        @keyframes contrail {
+          0% {
+            width: 0;
+            opacity: 1;
+          }
+          8% {
+            width: 15px;
+          }
+          60% {
+            opacity: 0.7;
+            width: 80px;
+          }
+          100% {
+            opacity: 0;
+            width: 160px;
+          }
+        }
+
+        .state--sent {
+          display: none;
+        }
+
+        .state--sent svg {
+          transform: scale(1.25);
+          margin-right: 8px;
+        }
+
+        .button:focus .state--default {
+          position: absolute;
+        }
+
+        .button:focus .state--sent {
+          display: flex;
+        }
+
+        .button:focus .state--sent span {
+          opacity: 0;
+          animation: slideDown 0.8s ease forwards calc(var(--i) * 0.2s);
+        }
+
+        .button:focus .state--sent .icon svg {
+          opacity: 0;
+          animation: appear 1.2s ease forwards 0.8s;
+        }
+
+        @keyframes appear {
+          0% {
+            opacity: 0;
+            transform: scale(4) rotate(-40deg);
+            color: var(--primary);
+            filter: blur(4px);
+          }
+          30% {
+            opacity: 1;
+            transform: scale(0.6);
+            filter: blur(1px);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.2);
+            filter: blur(0);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        .button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
       `}</style>
 
-      <section className="comments-shell">
-      <div className="comments-topbar">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="h-5 w-5 text-slate-700" />
-          <h3 className="comments-title">Comentarios ({comments.length})</h3>
+      <AlertDialog open={deleteTargetId !== null} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
+        <AlertDialogContent className="max-w-md rounded-[24px] border border-border bg-white p-6 shadow-[0_25px_60px_rgba(15,23,42,0.18)]">
+          <AlertDialogHeader>
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+              <Trash2 className="h-5 w-5" />
+            </div>
+            <AlertDialogTitle className="text-xl font-bold text-slate-900">¿Eliminar comentario?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-slate-600">
+              Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4 sm:justify-end">
+            <AlertDialogCancel onClick={() => setDeleteTargetId(null)} className="rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteTargetId !== null) {
+                  void deleteComment(deleteTargetId);
+                }
+              }}
+              className="rounded-xl bg-red-600 text-white hover:bg-red-700"
+            >
+              Aceptar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <section className="mt-12 rounded-[32px] border border-[#ececf5] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.04)] sm:p-6">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-[#5b4de6]" />
+            <h3 className="text-[2rem] font-black tracking-[-0.04em] text-slate-900">Comentarios</h3>
+          </div>
+
+          <div className="flex items-center gap-1 rounded-full border border-[#e8e5f7] bg-[#f7f7fb] p-1">
+            {(["popular", "newest"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setSortMode(option)}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                  sortMode === option
+                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {option === "popular" ? "Popular" : "Más recientes"}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="sort-toggle" aria-label="Ordenar comentarios">
-          <button
-            type="button"
-            className={`sort-button ${sortMode === "popular" ? "active" : ""}`}
-            onClick={() => setSortMode("popular")}
-          >
-            Popular
-          </button>
-          <button
-            type="button"
-            className={`sort-button ${sortMode === "newest" ? "active" : ""}`}
-            onClick={() => setSortMode("newest")}
-          >
-            Más nuevos
-          </button>
-        </div>
-      </div>
+        {!session ? (
+          <div className="rounded-[26px] border border-dashed border-[#e8e5f7] bg-[#f9f9fd] p-5 text-center">
+            <p className="mb-3 text-sm text-slate-600">Debés iniciar sesión para publicar o responder comentarios.</p>
+            <Button variant="default" onClick={() => openAuthDialog("login")} className="rounded-xl bg-[#5b4de6] text-white hover:bg-[#4d40d8]">
+              <LogIn className="h-4 w-4" /> Iniciar sesión
+            </Button>
+          </div>
+        ) : (
+          !replyTo && (
+            <div className="mb-6 flex items-center gap-3 rounded-[24px] border border-[#eceaf8] bg-[#f7f7fb] p-3 shadow-[inset_0_0_0_1px_rgba(91,77,230,0.03)]">
+              {session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture ? (
+                <img
+                  src={session.user.user_metadata.avatar_url || session.user.user_metadata.picture}
+                  alt={session.user.user_metadata.full_name || session.user.email || "Usuario"}
+                  className="h-11 w-11 rounded-full object-cover ring-2 ring-white"
+                />
+              ) : (
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#5b4de6] text-sm font-bold text-white">
+                  {(session.user.user_metadata.full_name || session.user.email || "U")
+                    .split(" ")
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part: string) => part[0]?.toUpperCase() ?? "")
+                    .join("") || "U"}
+                </div>
+              )}
 
-      {!session || !session.user ? (
-        <div className="rounded-2xl border border-dashed border-border bg-background p-5 text-center">
-          <p className="mb-3 text-sm text-muted-foreground">Debés iniciar sesión para publicar o responder comentarios.</p>
-          <Button variant="default" onClick={() => openAuthDialog("login")}>
-            <LogIn className="h-4 w-4" /> Iniciar sesión
-          </Button>
-        </div>
-      ) : (
-        !replyTo && (
-          <div className="mb-6">
-            <div className="composer">
-              <div className="composer-avatar">
-                {session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture ? (
-                  <img
-                    src={session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture}
-                    alt="Tu avatar"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div
-                    className="flex h-full w-full items-center justify-center text-xs font-bold text-white"
-                    style={{
-                      backgroundColor: getProfileColor(
-                        session.user.user_metadata?.full_name ||
-                          session.user.user_metadata?.name ||
-                          session.user.email?.split("@")[0] ||
-                          "Usuario"
-                      ),
-                    }}
-                  >
-                    {(session.user.user_metadata?.full_name ||
-                      session.user.user_metadata?.name ||
-                      session.user.email?.split("@")[0] ||
-                      "Usuario")
-                      .split(" ")
-                      .filter(Boolean)
-                      .slice(0, 2)
-                      .map((part) => part[0]?.toUpperCase() ?? "")
-                      .join("") || "U"}
-                  </div>
-                )}
-              </div>
-              <input
-                aria-label="Escribir comentario"
+              <Textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Escribe tu comentario aquí..."
+                placeholder="Escribí tu comentario..."
                 maxLength={2000}
-                className="composer-input"
+                rows={1}
+                className="min-h-[52px] flex-1 resize-none border-0 bg-transparent text-base text-slate-900 shadow-none placeholder:text-slate-500 focus-visible:ring-0"
               />
-              <button
+
+              <Button
                 type="button"
                 disabled={isSubmitting || !draft.trim()}
                 onClick={submitComment}
-                className={`send-btn ${isSubmitting ? "sending" : ""}`}
-                aria-label="Enviar comentario"
+                className="h-12 w-12 shrink-0 rounded-2xl bg-[#5b4de6] p-0 text-white shadow-[0_12px_30px_rgba(91,77,230,0.38)] transition-all hover:bg-[#4d40d8] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <Send className={`h-4 w-4 ${isSubmitting ? "animate-pulse" : ""}`} />
-              </button>
+                <Send className="h-4 w-4" />
+              </Button>
             </div>
+          )
+        )}
+
+        {error && <p className="mb-4 rounded-xl border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</p>}
+
+        {loading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="h-24 animate-pulse rounded-[22px] bg-slate-100" />
+            ))}
           </div>
-        )
-      )}
-
-      {deleteTargetId !== null && (
-        <div className="delete-confirm-overlay" onClick={() => !isDeletingComment && setDeleteTargetId(null)}>
-          <div className="delete-confirm-dialog" onClick={(event) => event.stopPropagation()}>
-            <div className="delete-confirm-title">Eliminar comentario</div>
-            <p className="delete-confirm-body">¿Seguro que querés borrar este comentario? Esta acción no se puede deshacer.</p>
-            <div className="delete-confirm-actions">
-              <button type="button" className="delete-confirm-button" onClick={() => setDeleteTargetId(null)} disabled={isDeletingComment}>
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="delete-confirm-button primary"
-                onClick={async () => {
-                  if (deleteTargetId === null) return;
-                  await deleteComment(deleteTargetId);
-                }}
-                disabled={isDeletingComment}
-              >
-                {isDeletingComment ? "Eliminando..." : "Aceptar"}
-              </button>
-            </div>
+        ) : rootComments.length === 0 ? (
+          <div className="rounded-[24px] border border-dashed border-[#e8e5f7] bg-[#f9f9fd] p-6 text-center text-sm text-slate-500">
+            Todavía no hay comentarios. ¡Sé el primero en comentar!
           </div>
-        </div>
-      )}
-
-      {error && <p className="mb-4 rounded-xl border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</p>}
-
-      {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="h-24 animate-pulse rounded-2xl bg-muted/70" />
-          ))}
-        </div>
-      ) : rootComments.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-background p-6 text-center text-sm text-muted-foreground">
-          Todavía no hay comentarios. ¡Sé el primero en comentar!
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {rootComments.map((comment) => (
-            <CommentThread
-              key={comment.id}
-              comment={comment}
-              children={commentsByParent[comment.id] ?? []}
-              childrenMap={commentsByParent}
-              session={session}
-              profiles={profiles}
-              onReply={handleReply}
-              onLike={likeComment}
-              onDelete={(commentId) => setDeleteTargetId(commentId)}
-              animatedLikes={animatedLikes}
-              highlighted={highlightedCommentId === comment.id}
-              closingReplies={closingReplies}
-              isRemoving={deleteTargetId === comment.id && isDeletingComment}
-              depth={0}
-              replyTo={replyTo}
-              replyTargetName={replyTargetName}
-              draft={draft}
-              onDraftChange={setDraft}
-              onCancelReply={() => {
-                setReplyComposerClosing(true);
-                window.setTimeout(() => {
+        ) : (
+          <div className="space-y-0">
+            {rootComments.map((comment) => (
+              <CommentThread
+                key={comment.id}
+                comment={comment}
+                children={commentsByParent[comment.id] ?? []}
+                childrenMap={commentsByParent}
+                session={session}
+                profiles={profiles}
+                onReply={handleReply}
+                onLike={likeComment}
+                onDelete={(commentId) => setDeleteTargetId(commentId)}
+                animatedLikes={animatedLikes}
+                highlighted={highlightedCommentId === comment.id}
+                depth={0}
+                replyTo={replyTo}
+                replyTargetName={replyTargetName}
+                draft={draft}
+                onDraftChange={setDraft}
+                onCancelReply={() => {
                   setReplyTo(null);
                   setReplyTargetName("");
                   setDraft("");
-                  setReplyComposerClosing(false);
-                }, 180);
-              }}
-              onSubmitReply={submitComment}
-              isSubmitting={isSubmitting}
-              isRepliesExpanded={Boolean(expandedReplies[comment.id])}
-              expandedReplies={expandedReplies}
-              visibleRepliesCounts={visibleRepliesCounts}
-              onLoadMoreReplies={handleLoadMoreReplies}
-              onToggleReplies={handleToggleReplies}
-            />
-          ))}
-
-          {hasMore && (
-            <div className="flex justify-center pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={async () => {
-                  const nextPage = page + 1;
-                  setPage(nextPage);
-                  setLoadingMore(true);
-                  const from = nextPage * PAGE_SIZE;
-                  const to = from + PAGE_SIZE - 1;
-
-                  const { data, error: fetchError } = await supabase
-                    .from("comments")
-                    .select("*")
-                    .eq("article_id", articleId)
-                    .order("created_at", { ascending: false })
-                    .range(from, to);
-
-                  if (fetchError) {
-                    setError("No se pudieron cargar más comentarios.");
-                    setLoadingMore(false);
-                    return;
-                  }
-
-                  const more = (data as CommentRecord[]) ?? [];
-                  const merged = [...comments, ...more];
-                  setComments(merged);
-                  if (more.length > 0) {
-                    await hydrateProfilesForComments(more);
-                  }
-                  setHasMore(more.length === PAGE_SIZE);
-                  setLoadingMore(false);
                 }}
-                disabled={loadingMore}
-              >
-                {loadingMore ? "Cargando..." : "Cargar más"}
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
+                onSubmitReply={submitComment}
+                isSubmitting={isSubmitting}
+                expandedReplies={expandedReplies}
+                visibleReplyCounts={visibleReplyCounts}
+                onToggleReplies={(commentId) => {
+                  setExpandedReplies((current) => ({ ...current, [commentId]: !current[commentId] }));
+                }}
+                onLoadMoreReplies={(commentId) => {
+                  setVisibleReplyCounts((current) => ({
+                    ...current,
+                    [commentId]: (current[commentId] ?? 8) + 8,
+                  }));
+                }}
+                removingCommentIds={removingCommentIds}
+              />
+            ))}
+
+            {hasMore && (
+              <div className="flex justify-center pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={async () => {
+                    const nextPage = page + 1;
+                    setPage(nextPage);
+                    setLoadingMore(true);
+                    const from = nextPage * PAGE_SIZE;
+                    const to = from + PAGE_SIZE - 1;
+
+                    const { data, error: fetchError } = await supabase
+                      .from("comments")
+                      .select("*")
+                      .eq("article_id", articleId)
+                      .order("created_at", { ascending: false })
+                      .range(from, to);
+
+                    if (fetchError) {
+                      setError("No se pudieron cargar más comentarios.");
+                      setLoadingMore(false);
+                      return;
+                    }
+
+                    const more = (data as CommentRecord[]) ?? [];
+                    if (more.length > 0) {
+                      await hydrateProfilesForComments(more);
+                    }
+                    setComments((current) => [...current, ...more]);
+                    setHasMore(more.length === PAGE_SIZE);
+                    setLoadingMore(false);
+                  }}
+                  disabled={loadingMore}
+                  className="rounded-full border-[#e8e5f7] bg-[#f7f7fb] px-5 py-2 text-sm font-medium text-slate-700 hover:bg-[#f1f1fb]"
+                >
+                  {loadingMore ? "Cargando..." : "Cargar más"}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </section>
-    </CommentsErrorBoundary>
+    </>
   );
 }
 
@@ -1326,7 +1071,6 @@ function CommentThread({
   onDelete,
   animatedLikes,
   highlighted,
-  isRemoving,
   depth,
   replyTo,
   replyTargetName,
@@ -1335,12 +1079,11 @@ function CommentThread({
   onCancelReply,
   onSubmitReply,
   isSubmitting,
-  isRepliesExpanded,
   expandedReplies,
-  closingReplies,
-  visibleRepliesCounts,
+  visibleReplyCounts,
   onToggleReplies,
   onLoadMoreReplies,
+  removingCommentIds,
 }: {
   comment: CommentRecord;
   children: CommentRecord[];
@@ -1352,7 +1095,6 @@ function CommentThread({
   onDelete: (id: number) => void;
   animatedLikes: Record<number, boolean>;
   highlighted?: boolean;
-  isRemoving?: boolean;
   depth: number;
   replyTo: number | null;
   replyTargetName: string;
@@ -1361,15 +1103,14 @@ function CommentThread({
   onCancelReply: () => void;
   onSubmitReply: () => void;
   isSubmitting: boolean;
-  isRepliesExpanded?: boolean;
-  expandedReplies?: Record<number, boolean>;
-  closingReplies?: Record<number, boolean>;
-  visibleRepliesCounts?: Record<number, number>;
-  onToggleReplies?: (commentId: number) => void;
-  onLoadMoreReplies?: (commentId: number) => void;
+  expandedReplies: Record<number, boolean>;
+  visibleReplyCounts: Record<number, number>;
+  onToggleReplies: (id: number) => void;
+  onLoadMoreReplies: (id: number) => void;
+  removingCommentIds: Record<number, boolean>;
 }) {
-  const safeBody = sanitizeText(comment?.body ?? "");
-  const profile = profiles?.[comment?.user_id ?? ""];
+  const safeBody = sanitizeText(comment.body);
+  const profile = profiles[comment.user_id];
   const sessionUserMeta = session?.user?.user_metadata ?? {};
   const profileFallbackName =
     profile?.full_name?.trim() ||
@@ -1378,64 +1119,81 @@ function CommentThread({
       : null) ||
     "Usuario";
   const avatarUrl =
-    typeof profile?.avatar_url === "string" && profile.avatar_url.trim()
-      ? profile.avatar_url
-      : comment.user_id === session?.user?.id
-        ? sessionUserMeta.avatar_url || sessionUserMeta.picture || null
-        : null;
-  const fallbackAvatarSource = typeof avatarUrl === "string" && avatarUrl.trim() ? avatarUrl : profileFallbackName;
-  const authorName = String(profileFallbackName || "Usuario");
-  const profileColor = profile?.profile_color ?? getProfileColor(authorName);
-  const isAnimating = Boolean(animatedLikes[comment.id]);
-  const generatedInitials = String(fallbackAvatarSource ?? "Usuario")
-    .split(/\s+/)
+    profile?.avatar_url ||
+    (comment.user_id === session?.user?.id
+      ? sessionUserMeta.avatar_url || sessionUserMeta.picture || null
+      : null);
+  const authorName = profileFallbackName;
+  const initials = authorName
+    .split(" ")
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("") || "U";
-
-  const safeChildren = Array.isArray(children) ? children : [];
-  const visibleChildren = safeChildren.slice(0, visibleRepliesCounts?.[comment.id] ?? Math.min(safeChildren.length, 8));
-  const hasMoreReplies = safeChildren.length > visibleChildren.length;
+  const profileColor = profile?.profile_color ?? getProfileColor(authorName);
+  const isAnimating = Boolean(animatedLikes[comment.id]);
+  const isRemoving = Boolean(removingCommentIds[comment.id]);
+  const isRepliesExpanded = Boolean(expandedReplies[comment.id]);
+  const visibleReplyLimit = visibleReplyCounts[comment.id] ?? 8;
+  const visibleChildren = children.slice(0, visibleReplyLimit);
+  const hasMoreReplies = children.length > visibleReplyLimit;
 
   return (
     <div
-      className={`comment-card ${highlighted ? "highlighted" : ""} ${isRemoving ? "is-removing" : ""}`}
+      className={`relative rounded-[24px] border bg-white p-4 transition-all duration-300 ${
+        highlighted ? "border-[#5b4de6]/30 shadow-[0_0_0_2px_rgba(91,77,230,0.12)] animate-[comment-pop_0.7s_ease-out]" : "border-[#eef0f8]"
+      } ${isRemoving ? "comment-card-removing" : ""}`}
       style={{ marginLeft: depth > 0 ? `${depth * 18}px` : 0 }}
     >
-      <div className="comment-header">
-        <div className="comment-user">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
           {avatarUrl ? (
-            <img src={avatarUrl} alt={authorName} className="comment-user-avatar" />
+            <img src={avatarUrl} alt={authorName} className="h-11 w-11 rounded-full object-cover ring-2 ring-[#f0f1f8]" />
           ) : (
             <div
-              className="comment-user-avatar flex items-center justify-center text-[11px] font-bold text-white"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white ring-2 ring-[#f0f1f8]"
               style={{ backgroundColor: profileColor }}
             >
-              {generatedInitials}
+              {initials}
             </div>
           )}
 
-          <div className="comment-meta">
-            <span className="comment-author">{authorName}</span>
-            <span className="comment-date">{formatDate(comment.created_at)}</span>
+          <div>
+            <p className="text-sm font-semibold text-slate-900">{authorName}</p>
+            <p className="text-xs text-slate-500">{formatDate(comment.created_at)}</p>
           </div>
         </div>
 
         {session?.user?.id === comment.user_id && (
-          <button type="button" onClick={() => onDelete(comment.id)} className="comment-ghost" aria-label="Eliminar comentario">
-            <Trash2 className="h-4 w-4" />
+          <button
+            type="button"
+            onClick={() => onDelete(comment.id)}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Eliminar comentario"
+          >
+            <MoreHorizontal className="h-4 w-4" />
           </button>
         )}
       </div>
 
-      <div className="comment-body" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(safeBody) }} />
+      <div className="mt-3 whitespace-pre-wrap text-[15px] leading-7 text-slate-700" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(safeBody) }} />
 
-      <div className="comment-actions">
+      <div className="mt-4 flex items-center gap-3">
         <button
           type="button"
-          className={`comment-icon-button like ${isAnimating ? "is-animating" : ""}`}
+          onClick={() => onReply(comment.id, authorName)}
+          className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
+        >
+          <Reply className="h-4 w-4" />
+          <span>Responder</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => onLike(comment.id)}
+          className={`ml-auto inline-flex items-center gap-2 rounded-full border border-[#eceaf8] bg-[#f7f7fb] px-3 py-1.5 text-sm font-medium text-slate-700 transition-all ${
+            isAnimating ? "scale-110 shadow-[0_0_18px_rgba(239,68,68,0.2)]" : "hover:scale-[1.02]"
+          }`}
         >
           <Heart
             className={`h-4 w-4 ${isAnimating ? "fill-red-500 text-red-500" : "text-slate-700"}`}
@@ -1443,87 +1201,95 @@ function CommentThread({
           />
           <span>{comment.like_count}</span>
         </button>
-        <button type="button" className="comment-icon-button" onClick={() => onReply(comment.id, authorName)}>
-          <Reply className="h-4 w-4" />
-          <span>Responder</span>
-        </button>
       </div>
 
-      {safeChildren.length > 0 && (
-        <button
-          type="button"
-          className="replies-toggle"
-          onClick={() => onToggleReplies?.(comment.id)}
+      {session && (
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-out ${
+            replyTo === comment.id ? "mt-4 max-h-[420px] opacity-100" : "max-h-0 opacity-0"
+          }`}
         >
-          <span className="inline-block" style={{ transform: isRepliesExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }}>
-            ▾
-          </span>
-          {isRepliesExpanded ? `Ocultar ${safeChildren.length} ${safeChildren.length === 1 ? "respuesta" : "respuestas"}` : `Ver ${safeChildren.length} ${safeChildren.length === 1 ? "respuesta" : "respuestas"}`}
-        </button>
-      )}
+          <div className="rounded-[20px] border border-[#eceaf8] bg-[#f9f9fd] p-3 shadow-[inset_0_0_0_1px_rgba(91,77,230,0.02)]">
+            <div className="mb-2 text-xs font-medium text-slate-500">Respondiendo a {replyTargetName || "este comentario"}</div>
+            <Textarea
+              value={draft}
+              onChange={(event) => onDraftChange(event.target.value)}
+              placeholder="Escribí tu respuesta..."
+              rows={3}
+              maxLength={2000}
+              className="min-h-[90px] resize-none border-0 bg-white text-sm placeholder:text-slate-400 focus-visible:ring-0"
+            />
 
-      {replyTo === comment.id && session && (
-        <div className={`reply-box ${replyComposerClosing ? "is-closing" : ""}`}>
-          <div className="reply-label">Respondiendo a {replyTargetName || "este comentario"}</div>
-          <Textarea
-            value={draft}
-            onChange={(event) => onDraftChange(event.target.value)}
-            placeholder="Escribe tu respuesta..."
-            rows={3}
-            maxLength={2000}
-          />
-
-          <div className="reply-actions">
-            <button type="button" className="reply-cancel" onClick={onCancelReply}>
-              Cancelar
-            </button>
-            <button type="button" className="reply-submit" disabled={isSubmitting || !draft.trim()} onClick={onSubmitReply}>
-              Responder
-            </button>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={onCancelReply} className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+                Cancelar
+              </Button>
+              <Button type="button" size="sm" disabled={isSubmitting || !draft.trim()} onClick={onSubmitReply} className="rounded-full bg-[#5b4de6] text-white hover:bg-[#4d40d8]">
+                <Send className="h-4 w-4" /> Responder
+              </Button>
+            </div>
           </div>
         </div>
       )}
 
-      {safeChildren.length > 0 && isRepliesExpanded && (
-        <div className={`reply-wrapper ${closingReplies?.[comment.id] ? "is-closing" : ""}`}>
-          {visibleChildren.map((child) => (
-            <CommentThread
-              key={child.id}
-              comment={child}
-              children={childrenMap[child.id] ?? []}
-              childrenMap={childrenMap}
-              session={session}
-              profiles={profiles}
-              onReply={onReply}
-              onLike={onLike}
-              onDelete={onDelete}
-              animatedLikes={animatedLikes}
-              depth={depth + 1}
-              replyTo={replyTo}
-              replyTargetName={replyTargetName}
-              draft={draft}
-              onDraftChange={onDraftChange}
-              onCancelReply={onCancelReply}
-              onSubmitReply={onSubmitReply}
-              isSubmitting={isSubmitting}
-              isRepliesExpanded={Boolean(expandedReplies?.[child.id])}
-              expandedReplies={expandedReplies}
-              closingReplies={closingReplies}
-              visibleRepliesCounts={visibleRepliesCounts}
-              onToggleReplies={onToggleReplies}
-              onLoadMoreReplies={onLoadMoreReplies}
-            />
-          ))}
+      {children.length > 0 && (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => onToggleReplies(comment.id)}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#5b4de6] transition-transform hover:translate-x-0.5"
+          >
+            {isRepliesExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            <span>{isRepliesExpanded ? `Ocultar ${children.length} respuestas` : `Ver ${children.length} respuesta${children.length === 1 ? "" : "s"}`}</span>
+          </button>
 
-          {hasMoreReplies && (
-            <button
-              type="button"
-              className="replies-toggle replies-more"
-              onClick={() => onLoadMoreReplies?.(comment.id)}
-            >
-              Cargar más respuestas
-            </button>
-          )}
+          <div
+            className={`overflow-hidden transition-all duration-400 ease-out ${
+              isRepliesExpanded ? "mt-3 max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+            }`}
+          >
+            <div className="space-y-3 border-l border-[#eceaf8] pl-3">
+              {visibleChildren.map((child) => (
+                <CommentThread
+                  key={child.id}
+                  comment={child}
+                  children={childrenMap[child.id] ?? []}
+                  childrenMap={childrenMap}
+                  session={session}
+                  profiles={profiles}
+                  onReply={onReply}
+                  onLike={onLike}
+                  onDelete={onDelete}
+                  animatedLikes={animatedLikes}
+                  depth={depth + 1}
+                  replyTo={replyTo}
+                  replyTargetName={replyTargetName}
+                  draft={draft}
+                  onDraftChange={onDraftChange}
+                  onCancelReply={onCancelReply}
+                  onSubmitReply={onSubmitReply}
+                  isSubmitting={isSubmitting}
+                  expandedReplies={expandedReplies}
+                  visibleReplyCounts={visibleReplyCounts}
+                  onToggleReplies={onToggleReplies}
+                  onLoadMoreReplies={onLoadMoreReplies}
+                  removingCommentIds={removingCommentIds}
+                />
+              ))}
+            </div>
+
+            {hasMoreReplies && isRepliesExpanded && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => onLoadMoreReplies(comment.id)}
+                  className="rounded-full border border-[#e8e5f7] bg-[#f7f7fb] px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-[#f1f1fb]"
+                >
+                  Cargar más
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
