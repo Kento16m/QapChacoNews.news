@@ -439,7 +439,8 @@ export function CommentsSection({ articleId }: { articleId: string }) {
       return;
     }
 
-    if (!session?.access_token || !session?.user?.id) {
+    const currentUser = session?.user;
+    if (!session?.access_token || !currentUser?.id) {
       setError("Tu sesión de Supabase está vencida o no está iniciada. Volvé a iniciar sesión para comentar.");
       return;
     }
@@ -453,7 +454,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
     const optimisticComment: CommentRecord = {
       id: Date.now() + Math.floor(Math.random() * 1000),
       article_id: articleId,
-      user_id: session.user.id,
+      user_id: currentUser.id,
       parent_id: replyTo,
       body: cleanBody,
       like_count: 0,
@@ -481,7 +482,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
         body: {
           article_id: articleId,
           parent_id: replyTo,
-          user_id: session.user.id,
+          user_id: currentUser.id,
           body: cleanBody,
         },
       });
@@ -583,7 +584,8 @@ export function CommentsSection({ articleId }: { articleId: string }) {
       return;
     }
 
-    if (!session) {
+    const currentUser = session?.user;
+    if (!currentUser?.id) {
       setError("Iniciá sesión para dar like.");
       return;
     }
@@ -595,7 +597,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
 
     const { error: likeError } = await supabase.from("comment_likes").insert({
       comment_id: commentId,
-      user_id: session.user.id,
+      user_id: currentUser.id,
     });
 
     if (likeError) {
@@ -618,12 +620,13 @@ export function CommentsSection({ articleId }: { articleId: string }) {
 
   const deleteComment = async (commentId: number) => {
     if (!supabase) return;
-    if (!session) return;
+    const currentUser = session?.user;
+    if (!currentUser?.id) return;
 
     setIsDeletingComment(true);
     setError("");
 
-    const { error } = await supabase.from("comments").delete().eq("id", commentId).eq("user_id", session.user.id);
+    const { error } = await supabase.from("comments").delete().eq("id", commentId).eq("user_id", currentUser.id);
 
     if (error) {
       setError("No se pudo eliminar el comentario.");
@@ -1123,7 +1126,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
         </div>
       </div>
 
-      {!session ? (
+      {!session || !session.user ? (
         <div className="rounded-2xl border border-dashed border-border bg-background p-5 text-center">
           <p className="mb-3 text-sm text-muted-foreground">Debés iniciar sesión para publicar o responder comentarios.</p>
           <Button variant="default" onClick={() => openAuthDialog("login")}>
