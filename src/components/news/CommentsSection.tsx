@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import { ChevronDown, ChevronUp, Heart, LogIn, MessageSquare, MoreHorizontal, Reply, Send, Trash2 } from "lucide-react";
 import {
@@ -169,6 +169,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
+  const pageRef = useRef(page);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [animatedLikes, setAnimatedLikes] = useState<Record<number, boolean>>({});
@@ -197,6 +198,10 @@ export function CommentsSection({ articleId }: { articleId: string }) {
       authListener.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
 
   useEffect(() => {
     if (highlightedCommentId === null) return;
@@ -293,9 +298,10 @@ export function CommentsSection({ articleId }: { articleId: string }) {
           filter: `article_id=eq.${articleId}`,
         },
         () => {
+          if (pageRef.current > 0) return;
           setPage(0);
           setComments([]);
-          fetchComments(0, false);
+          void fetchComments(0, false);
         }
       )
       .subscribe();
@@ -310,9 +316,10 @@ export function CommentsSection({ articleId }: { articleId: string }) {
           table: "comment_likes",
         },
         () => {
+          if (pageRef.current > 0) return;
           setPage(0);
           setComments([]);
-          fetchComments(0, false);
+          void fetchComments(0, false);
         }
       )
       .subscribe();
@@ -381,8 +388,32 @@ export function CommentsSection({ articleId }: { articleId: string }) {
       return;
     }
 
+    const optimisticComment: CommentRecord = {
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      article_id: articleId,
+      user_id: session.user.id,
+      parent_id: replyTo,
+      body: cleanBody,
+      like_count: 0,
+      created_at: new Date().toISOString(),
+    };
+
     setIsSubmitting(true);
     setError("");
+    setComments((current) => {
+      const withoutOptimistic = current.filter((item) => item.id !== optimisticComment.id);
+      const next = [optimisticComment, ...withoutOptimistic];
+      return next.slice(0, Math.max(PAGE_SIZE, current.length + 1));
+    });
+    setHighlightedCommentId(optimisticComment.id);
+
+    if (replyTo !== null) {
+      setExpandedReplies((current) => ({ ...current, [replyTo]: true }));
+      setVisibleReplyCounts((current) => ({
+        ...current,
+        [replyTo]: Math.max(current[replyTo] ?? 8, (commentsByParent[replyTo]?.length ?? 0) + 1),
+      }));
+    }
 
     try {
       const { data, error: invokeError } = await supabase.functions.invoke("moderate-comment", {
@@ -437,21 +468,27 @@ export function CommentsSection({ articleId }: { articleId: string }) {
       const insertedComment = (data as { comment?: CommentRecord })?.comment;
       if (insertedComment) {
         setComments((current) => {
-          const existing = current.some((item) => item.id === insertedComment.id);
-          if (existing) return current;
-          const next = [insertedComment, ...current];
-          return next.slice(0, PAGE_SIZE);
+          const withoutOptimistic = current.filter((item) => item.id !== optimisticComment.id);
+          const existing = withoutOptimistic.some((item) => item.id === insertedComment.id);
+          if (existing) return withoutOptimistic;
+          const next = [insertedComment, ...withoutOptimistic];
+          return next;
         });
         setHighlightedCommentId(insertedComment.id);
+      } else {
+        setComments((current) => current.filter((item) => item.id !== optimisticComment.id));
       }
 
       setPage(0);
       setHasMore(true);
       setDraft("");
+      setReplyTo(null);
+      setReplyTargetName("");
       if (replyTo !== null) {
         setExpandedReplies((current) => ({ ...current, [replyTo]: true }));
       }
     } catch (invokeError) {
+      setComments((current) => current.filter((item) => item.id !== optimisticComment.id));
       const message = normalizeErrorMessage(invokeError);
       setError(
         /jwt|unauthorized|401|token/i.test(message)
