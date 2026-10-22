@@ -28,6 +28,7 @@ import {
   type ForecastDay,
   type WeatherCurrent,
 } from "@/lib/weather";
+import { WeatherDashboard } from "@/components/weather/WeatherDashboard";
 import {
   CURRENCY_MODAL_LIST,
   CURRENCY_PREVIEW,
@@ -251,14 +252,14 @@ export function CurrencyTicker({ className = "" }: { className?: string }) {
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[92vh] w-[calc(100%-1rem)] max-w-2xl overflow-y-auto rounded-[28px] border-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),_transparent_35%),_var(--background)] p-0 shadow-[0_20px_80px_rgba(15,23,42,0.28)] sm:w-full">
-          <div className="flex items-center justify-between border-b border-border/70 bg-card/80 px-5 py-4 backdrop-blur-sm">
-            <DialogHeader className="space-y-1 text-left">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-primary">
-                Monedas
-              </div>
-              <DialogTitle className="text-xl font-bold">Cotización en PYG</DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground">
+        <DialogContent
+          hideCloseButton
+          className="max-h-[92vh] w-[calc(100%-1rem)] max-w-3xl overflow-y-auto rounded-[30px] border border-[#e9e2d9] bg-[radial-gradient(circle_at_top_left,_rgba(14,116,144,0.08),_transparent_26%),linear-gradient(180deg,#f9f7f4_0%,#f3efe9_100%)] p-0 shadow-[0_28px_80px_rgba(15,23,42,0.14)] sm:w-full"
+        >
+          <div className="flex items-center justify-between border-b border-[#e9e2d9] bg-white/60 px-5 py-4 backdrop-blur-sm">
+            <DialogHeader className="space-y-2 text-left">
+              <DialogTitle className="text-[2rem] font-black tracking-[-0.05em] text-slate-900">Cotización en PYG</DialogTitle>
+              <DialogDescription className="text-sm text-slate-600">
                 Valor de cada moneda frente al guaraní.
               </DialogDescription>
             </DialogHeader>
@@ -267,57 +268,57 @@ export function CurrencyTicker({ className = "" }: { className?: string }) {
               <button
                 type="button"
                 aria-label="Cerrar cotizaciones"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-secondary text-lg text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#ddd6cf] bg-white/80 text-xl leading-none text-slate-600 shadow-[0_8px_18px_rgba(15,23,42,0.05)] transition hover:bg-slate-50 hover:text-slate-900"
               >
-                ×
+                <span className="translate-y-[-1px]">×</span>
               </button>
             </DialogClose>
           </div>
 
-          <div className="grid gap-2 p-4 sm:grid-cols-2">
-            {CURRENCY_MODAL_LIST.map((currency) => {
-              const rate = rates[currency.code];
+          <div className="max-h-[calc(92vh-118px)] overflow-y-auto overscroll-contain p-4 sm:p-5">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {CURRENCY_MODAL_LIST.map((currency) => {
+                const rate = rates[currency.code];
 
-              return (
-                <div
-                  key={currency.code}
-                  className="rounded-2xl border border-border/70 bg-gradient-to-r from-secondary/80 to-background/90 px-3 py-3 shadow-sm transition hover:border-primary/30 hover:shadow-md"
-                >
-                  <div className="flex items-center justify-between gap-3">
+                return (
+                  <div
+                    key={currency.code}
+                    className="group rounded-[26px] border border-[#e7e0d8] bg-white/75 p-3.5 shadow-[0_10px_20px_rgba(15,23,42,0.04)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-1 hover:border-[#d4ece7] hover:shadow-[0_16px_28px_rgba(15,23,42,0.08)]"
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/60 shadow-inner ring-1 ring-black/5 dark:bg-slate-900/50 dark:ring-white/5">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-100 via-white to-slate-200 shadow-inner ring-1 ring-slate-200">
                         <CountryFlag className={currency.flagClass} label={currency.name} size="lg" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold">{currency.code}</p>
-                        <p className="truncate text-[11px] text-muted-foreground">{currency.name}</p>
+                        <p className="text-base font-black tracking-[0.09em] text-slate-900">{currency.code}</p>
+                        <p className="truncate text-[11px] text-slate-500">{currency.name}</p>
                       </div>
                     </div>
-                  </div>
 
-                  {rate ? (
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-left">
-                      <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-2.5 py-2 shadow-sm">
-                        <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
-                          Compra
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-foreground">₲ {formatPyg(rate.buy)}</p>
+                    {rate ? (
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-left">
+                        <div className="rounded-[18px] border border-[#bfeae2] bg-[#ebfff8] px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#0f766e]">
+                            Compra
+                          </p>
+                          <p className="mt-1 text-lg font-black tracking-[-0.04em] text-slate-900">₲ {formatPyg(rate.buy)}</p>
+                        </div>
+                        <div className="rounded-[18px] border border-[#f0dfad] bg-[#fff8de] px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#b45309]">
+                            Venta
+                          </p>
+                          <p className="mt-1 text-lg font-black tracking-[-0.04em] text-slate-900">₲ {formatPyg(rate.sell)}</p>
+                        </div>
                       </div>
-                      <div className="rounded-xl border border-amber-400/20 bg-amber-500/5 px-2.5 py-2 shadow-sm">
-                        <p className="text-[10px] uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">
-                          Venta
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-foreground">₲ {formatPyg(rate.sell)}</p>
+                    ) : (
+                      <div className="mt-3 rounded-[18px] border border-dashed border-slate-300 bg-slate-100/70 px-2 py-2.5 text-sm text-slate-500">
+                        Sin datos
                       </div>
-                    </div>
-                  ) : (
-                    <div className="mt-3 rounded-xl border border-dashed border-border/70 bg-muted/30 px-2 py-2 text-sm text-muted-foreground">
-                      Sin datos
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -325,30 +326,53 @@ export function CurrencyTicker({ className = "" }: { className?: string }) {
   );
 }
 
+function getWeatherFontIcon(icon: string): string {
+  const normalized = (icon ?? "01d").toLowerCase();
+
+  if (normalized === "01d" || normalized === "sun") return "wi wi-day-sunny";
+  if (normalized === "01n" || normalized === "moon") return "wi wi-night-clear";
+  if (normalized === "02d" || normalized === "sun-cloud") return "wi wi-day-cloudy";
+  if (normalized === "02n" || normalized === "cloud-moon") return "wi wi-night-alt-cloudy";
+  if (normalized === "03d" || normalized === "03n" || normalized === "cloud") return "wi wi-cloud";
+  if (normalized === "04d" || normalized === "04n" || normalized === "overcast") return "wi wi-cloudy";
+  if (normalized === "09d" || normalized === "09n" || normalized === "rain-light") return "wi wi-showers";
+  if (normalized === "10d" || normalized === "rain") return "wi wi-day-rain";
+  if (normalized === "10n") return "wi wi-night-alt-rain";
+  if (normalized === "11d" || normalized === "11n" || normalized === "storm-electric") return "wi wi-thunderstorm";
+  if (normalized === "13d" || normalized === "13n" || normalized === "snow") return "wi wi-snow";
+  if (normalized === "50d" || normalized === "50n" || normalized === "fog") return "wi wi-fog";
+  if (normalized === "storm") return "wi wi-storm-showers";
+  if (normalized === "showers") return "wi wi-showers";
+  if (normalized === "hail") return "wi wi-hail";
+  if (normalized === "wind") return "wi wi-windy";
+
+  return normalized.endsWith("n") ? "wi wi-night-clear" : "wi wi-day-sunny";
+}
+
 function WeatherIcon({
   icon,
   description,
   size = "md",
+  className = "",
 }: {
   icon: string;
   description: string;
   size?: "sm" | "md" | "lg";
+  className?: string;
 }) {
   const sizeClasses = {
-    sm: "h-5 w-5",
-    md: "h-8 w-8",
-    lg: "h-12 w-12",
+    sm: "text-lg",
+    md: "text-3xl",
+    lg: "text-5xl",
   };
 
   return (
-    <div className="grid place-items-center rounded-full bg-slate-900/90 ring-1 ring-white/10 shadow-sm backdrop-blur-sm">
-      <img
-        src={`https://openweathermap.org/img/wn/${icon}@2x.png`}
-        alt={description}
-        className={`${sizeClasses[size]} object-contain drop-shadow-[0_2px_8px_rgba(255,255,255,0.25)]`}
-        style={{ filter: "brightness(1.15) contrast(1.15)" }}
-      />
-    </div>
+    <span
+      aria-label={description}
+      title={description}
+      className={`${sizeClasses[size]} ${getWeatherFontIcon(icon)} block leading-none ${className}`}
+      style={{ color: "currentColor" }}
+    />
   );
 }
 
@@ -395,24 +419,24 @@ function WeatherQuickView({ onOpen, className = "" }: { onOpen: () => void; clas
       type="button"
       onClick={onOpen}
       aria-label="Ver pronóstico del clima"
-      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-slate-800/70 px-2 py-1.5 text-left text-[10px] text-slate-100 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] transition hover:bg-slate-700/70 focus:outline-none focus:ring-2 focus:ring-primary/80 sm:gap-2 sm:px-2.5 sm:py-1.5 sm:text-xs ${className}`}
+      className={`inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-700/80 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 px-2.5 py-1.5 text-left text-[10px] text-slate-100 shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition duration-200 hover:-translate-y-0.5 hover:border-sky-400/50 hover:shadow-[0_12px_28px_rgba(14,116,144,0.2)] focus:outline-none focus:ring-2 focus:ring-sky-400/70 sm:gap-2.5 sm:px-3 sm:py-1.75 sm:text-xs ${className}`}
     >
       {loading ? (
         <WeatherSkeleton />
       ) : weather?.icon ? (
-        <img
-          src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
-          alt={weather.description}
-          className="h-5 w-5 object-contain sm:h-6 sm:w-6"
-          style={{ filter: "brightness(1.15) contrast(1.15)" }}
+        <WeatherIcon
+          icon={weather.icon}
+          description={weather.description}
+          size="sm"
+          className="text-sky-300 drop-shadow-[0_0_12px_rgba(125,211,252,0.45)]"
         />
       ) : (
-        <CloudSun className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
+        <CloudSun className="h-4 w-4 text-sky-300 sm:h-5 sm:w-5" />
       )}
 
-      <span className="inline-flex items-center gap-1 font-semibold text-slate-100">
-        <MapPin className="h-3 w-3 opacity-80 sm:h-3.5 sm:w-3.5" />
-        <span>{error ? "Clima" : `${Math.round(weather?.temperature ?? 0)}°C`}</span>
+      <span className="inline-flex items-center gap-1.5 font-semibold tracking-tight text-slate-100">
+        <MapPin className="h-3 w-3 text-sky-300 opacity-90 sm:h-3.5 sm:w-3.5" />
+        <span>{error ? "Sin datos" : `${Math.round(weather?.temperature ?? 0)}°C`}</span>
       </span>
     </button>
   );
@@ -424,9 +448,29 @@ function WeatherForecastModal() {
   const [forecast, setForecast] = useState<ForecastDay[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains("dark"));
+
+  useEffect(() => {
+    const syncTheme = () => {
+      setIsDarkMode(document.documentElement.classList.contains("dark"));
+    };
+
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     let active = true;
 
     const loadDetails = async () => {
@@ -451,112 +495,112 @@ function WeatherForecastModal() {
     loadDetails();
     return () => {
       active = false;
+      document.body.style.overflow = previousOverflow;
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) {
+      document.body.style.overflow = "";
+    }
+  }, [open]);
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <>
       <WeatherQuickView onOpen={() => setOpen(true)} className="bg-slate-800/70" />
-      <DialogContent className="max-h-[92vh] w-[calc(100%-1.25rem)] max-w-2xl overflow-y-auto rounded-3xl border-0 bg-background p-0 shadow-2xl sm:w-full">
-        <div className="border-b p-5">
-          <DialogHeader className="space-y-1 text-left">
-            <DialogTitle className="text-xl font-bold">Clima en Asunción</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
-              Pronóstico detallado para hoy y los próximos días.
-            </DialogDescription>
-          </DialogHeader>
-        </div>
 
-        {loading ? (
-          <div className="space-y-5 p-5">
-            <div className="flex items-center gap-3 rounded-2xl border bg-secondary/60 p-4">
-              <div className="h-12 w-12 animate-pulse rounded-full bg-muted" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 w-24 animate-pulse rounded-full bg-muted" />
-                <div className="h-3 w-36 animate-pulse rounded-full bg-muted" />
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="h-24 animate-pulse rounded-2xl border bg-secondary/60" />
-              ))}
-            </div>
-          </div>
-        ) : error ? (
-          <div className="p-5">
-            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-              {error}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-5 p-5">
-            <div className="flex items-center justify-between rounded-2xl border bg-secondary/60 p-4">
-              <div className="flex items-center gap-3">
-                {weather?.icon ? (
-                  <WeatherIcon icon={weather.icon} description={weather.description} size="lg" />
-                ) : (
-                  <CloudSun className="h-10 w-10 text-primary" />
+      {open && (
+        <div
+          className="fixed inset-0 z-[9999] flex h-screen w-screen items-center justify-center bg-black/70 p-2 backdrop-blur-sm sm:p-4"
+          style={{ animation: "modal-overlay-in 0.22s ease-out forwards" }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+        >
+          <div
+            className={cn(
+              "relative flex h-[min(88vh,820px)] w-[min(98vw,1280px)] max-h-[820px] max-w-[1280px] origin-center overflow-hidden rounded-3xl border shadow-2xl",
+              isDarkMode
+                ? "border-slate-800 bg-slate-950 text-white"
+                : "border-slate-200 bg-white text-slate-900",
+            )}
+            style={{ animation: "modal-panel-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards" }}
+          >
+            <div className="flex w-full flex-col">
+              <div
+                className={cn(
+                  "flex items-center justify-between border-b px-4 py-3 sm:px-5",
+                  isDarkMode ? "border-slate-800 bg-slate-950/95" : "border-slate-200 bg-white/95",
                 )}
-                <div>
-                  <p className="text-sm text-muted-foreground">Ahora</p>
-                  <p className="text-3xl font-bold">
-                    {weather ? `${Math.round(weather.temperature)}°C` : "--°"}
-                  </p>
+              >
+                <div className="space-y-1 text-left">
+                  <div className={cn("text-lg font-bold sm:text-xl", isDarkMode ? "text-slate-100" : "text-slate-900")}>Pronóstico del tiempo</div>
                 </div>
-              </div>
-              <div className="text-right">
-                <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
-                  {weather?.description ?? "Sin descripción"}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Sensación térmica {weather ? `${Math.round(weather.feelsLike)}°C` : "--°"}
-                </p>
-              </div>
-            </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border bg-secondary/60 p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Humedad</p>
-                <p className="mt-2 text-xl font-semibold">{weather?.humidity ?? 0}%</p>
-              </div>
-              <div className="rounded-2xl border bg-secondary/60 p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Viento</p>
-                <p className="mt-2 text-xl font-semibold">{weather?.windSpeed ?? 0} km/h</p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border bg-secondary/60 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-base font-semibold">Pronóstico de 5 días</h3>
-                <span className="text-xs text-muted-foreground">Muestra diaria</span>
+                <button
+                  type="button"
+                  aria-label="Cerrar pronóstico del clima"
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "inline-flex h-9 w-9 items-center justify-center rounded-full border p-0 text-xl leading-none transition",
+                    isDarkMode
+                      ? "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+                      : "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900",
+                  )}
+                >
+                  <span className="translate-y-[-1px]">×</span>
+                </button>
               </div>
 
-              <div className="space-y-2">
-                {forecast.map((day) => (
-                  <div key={`${day.day}-${day.icon}`} className="flex items-center gap-3 rounded-xl border bg-background/60 p-3">
-                    <div className="w-20 shrink-0 text-sm font-medium text-foreground">{day.day}</div>
-                    <WeatherIcon icon={day.icon} description={day.description} size="sm" />
-                    <div className="min-w-0 flex-1 text-sm text-muted-foreground">{day.description}</div>
-                    <div className="shrink-0 text-sm font-semibold">
-                      {Math.round(day.tempMax)}° / {Math.round(day.tempMin)}°
+              {loading || error ? (
+                <div className={cn("space-y-4 p-4 sm:p-5", isDarkMode ? "bg-slate-950" : "bg-slate-50")}>
+                  {loading ? (
+                    <div
+                      className={cn(
+                        "space-y-5 rounded-[24px] border p-4",
+                        isDarkMode ? "border-slate-800 bg-slate-900/40" : "border-slate-200 bg-white",
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn("h-12 w-12 animate-pulse rounded-full", isDarkMode ? "bg-slate-800" : "bg-slate-200")} />
+                        <div className="flex-1 space-y-2">
+                          <div className={cn("h-4 w-24 animate-pulse rounded-full", isDarkMode ? "bg-slate-800" : "bg-slate-200")} />
+                          <div className={cn("h-3 w-36 animate-pulse rounded-full", isDarkMode ? "bg-slate-800" : "bg-slate-200")} />
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {Array.from({ length: 4 }).map((_, index) => (
+                          <div
+                            key={index}
+                            className={cn(
+                              "h-24 animate-pulse rounded-2xl border",
+                              isDarkMode ? "border-slate-800 bg-slate-900/50" : "border-slate-200 bg-slate-100",
+                            )}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ) : (
+                    <div
+                      className={cn(
+                        "rounded-[24px] border p-4 text-sm",
+                        isDarkMode ? "border-red-500/20 bg-red-500/5 text-red-300" : "border-red-200 bg-red-50 text-red-700",
+                      )}
+                    >
+                      {error}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className={cn("flex-1 overflow-y-auto", isDarkMode ? "bg-slate-950" : "bg-slate-50")}>
+                  <WeatherDashboard theme={isDarkMode ? "dark" : "light"} variant="modal" />
+                </div>
+              )}
             </div>
           </div>
-        )}
-
-        <div className="flex items-center justify-between border-t p-4">
-          <span className="text-xs text-muted-foreground">{weather?.city ?? "Asunción, PY"}</span>
-          <DialogClose asChild>
-            <button type="button" className="inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/80">
-              Cerrar
-            </button>
-          </DialogClose>
         </div>
-      </DialogContent>
-    </Dialog>
+      )}
+    </>
   );
 }
 

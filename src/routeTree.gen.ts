@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AvisoLegalRouteImport } from './routes/aviso-legal'
 import { Route as BuscarRouteImport } from './routes/buscar'
+import { Route as ClimaRouteImport } from './routes/clima'
 import { Route as CookiesRouteImport } from './routes/cookies'
 import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as PoliticaDePrivacidadRouteImport } from './routes/politica-de-privacidad'
@@ -41,6 +42,11 @@ const AvisoLegalRoute = AvisoLegalRouteImport.update({
 const BuscarRoute = BuscarRouteImport.update({
   id: '/buscar',
   path: '/buscar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClimaRoute = ClimaRouteImport.update({
+  id: '/clima',
+  path: '/clima',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CookiesRoute = CookiesRouteImport.update({
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/aviso-legal': typeof AvisoLegalRoute
   '/buscar': typeof BuscarRoute
+  '/clima': typeof ClimaRoute
   '/cookies': typeof CookiesRoute
   '/perfil': typeof PerfilRoute
   '/politica-de-privacidad': typeof PoliticaDePrivacidadRoute
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/aviso-legal': typeof AvisoLegalRoute
   '/buscar': typeof BuscarRoute
+  '/clima': typeof ClimaRoute
   '/cookies': typeof CookiesRoute
   '/perfil': typeof PerfilRoute
   '/politica-de-privacidad': typeof PoliticaDePrivacidadRoute
@@ -125,6 +133,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/aviso-legal': typeof AvisoLegalRoute
   '/buscar': typeof BuscarRoute
+  '/clima': typeof ClimaRoute
   '/cookies': typeof CookiesRoute
   '/perfil': typeof PerfilRoute
   '/politica-de-privacidad': typeof PoliticaDePrivacidadRoute
@@ -142,6 +151,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/aviso-legal'
     | '/buscar'
+    | '/clima'
     | '/cookies'
     | '/perfil'
     | '/politica-de-privacidad'
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/aviso-legal'
     | '/buscar'
+    | '/clima'
     | '/cookies'
     | '/perfil'
     | '/politica-de-privacidad'
@@ -172,6 +183,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/aviso-legal'
     | '/buscar'
+    | '/clima'
     | '/cookies'
     | '/perfil'
     | '/politica-de-privacidad'
@@ -188,6 +200,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   AvisoLegalRoute: typeof AvisoLegalRoute
   BuscarRoute: typeof BuscarRoute
+  ClimaRoute: typeof ClimaRoute
   CookiesRoute: typeof CookiesRoute
   PerfilRoute: typeof PerfilRoute
   PoliticaDePrivacidadRoute: typeof PoliticaDePrivacidadRoute
@@ -227,6 +240,13 @@ declare module '@tanstack/react-router' {
       path: '/buscar'
       fullPath: '/buscar'
       preLoaderRoute: typeof BuscarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clima': {
+      id: '/clima'
+      path: '/clima'
+      fullPath: '/clima'
+      preLoaderRoute: typeof ClimaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cookies': {
@@ -300,6 +320,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   AvisoLegalRoute: AvisoLegalRoute,
   BuscarRoute: BuscarRoute,
+  ClimaRoute: ClimaRoute,
   CookiesRoute: CookiesRoute,
   PerfilRoute: PerfilRoute,
   PoliticaDePrivacidadRoute: PoliticaDePrivacidadRoute,
