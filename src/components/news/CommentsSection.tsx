@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Component, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
 import DOMPurify from "dompurify";
 import { Heart, LogIn, MessageSquare, Reply, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,11 +27,18 @@ type ProfileSummary = {
 const formatDate = (iso: string) =>
   new Intl.DateTimeFormat("es-PY", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 
-const sanitizeText = (value: string) =>
-  DOMPurify.sanitize(value, {
+const sanitizeText = (value: unknown) => {
+  const normalized = typeof value === "string"
+    ? value
+    : typeof value === "number" || typeof value === "boolean"
+      ? String(value)
+      : "";
+
+  return DOMPurify.sanitize(normalized, {
     ALLOWED_TAGS: [],
     ALLOWED_ATTR: [],
   }).trim();
+};
 
 const offensiveContentMessage = "Tu comentario no es apto para esta comunidad. Por favor, elimina palabras ofensivas o contenido inapropiado y vuelve a intentarlo.";
 const rateLimitMessage = "Superaste el límite de mensajes. Por favor, esperá 1 minuto antes de comentar otra vez.";
@@ -146,6 +153,30 @@ const normalizeErrorMessage = (error: unknown): string => {
 };
 
 const PAGE_SIZE = 10;
+
+class CommentsErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("CommentsSection crashed:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <section className="mt-12 rounded-3xl border border-dashed border-muted-foreground/30 bg-card p-6 text-sm text-muted-foreground">
+          No se pudieron cargar los comentarios en este momento. Intentá nuevamente más tarde.
+        </section>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 export function CommentsSection({ articleId }: { articleId: string }) {
   const { openAuthDialog } = useAuth();
@@ -323,6 +354,10 @@ export function CommentsSection({ articleId }: { articleId: string }) {
   }, [articleId]);
 
   const handleReply = (commentId: number, authorName?: string) => {
+    if (!Number.isFinite(commentId) || commentId < 0) {
+      return;
+    }
+
     setReplyComposerClosing(false);
     setReplyTo(commentId);
     setReplyTargetName(authorName || "");
@@ -629,7 +664,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
   }
 
   return (
-    <>
+    <CommentsErrorBoundary>
       <style>{`
         .comments-shell {
           border: 1px solid rgba(148, 163, 184, 0.18);
@@ -1273,7 +1308,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
         </div>
       )}
       </section>
-    </>
+    </CommentsErrorBoundary>
   );
 }
 
@@ -1330,8 +1365,8 @@ function CommentThread({
   onToggleReplies?: (commentId: number) => void;
   onLoadMoreReplies?: (commentId: number) => void;
 }) {
-  const safeBody = sanitizeText(comment.body);
-  const profile = profiles[comment.user_id];
+  const safeBody = sanitizeText(comment?.body ?? "");
+  const profile = profiles?.[comment?.user_id ?? ""];
   const sessionUserMeta = session?.user?.user_metadata ?? {};
   const profileFallbackName =
     profile?.full_name?.trim() ||
@@ -1340,23 +1375,25 @@ function CommentThread({
       : null) ||
     "Usuario";
   const avatarUrl =
-    profile?.avatar_url ||
-    (comment.user_id === session?.user?.id
-      ? sessionUserMeta.avatar_url || sessionUserMeta.picture || null
-      : null);
-  const fallbackAvatarSource = avatarUrl || profileFallbackName;
-  const authorName = profileFallbackName;
+    typeof profile?.avatar_url === "string" && profile.avatar_url.trim()
+      ? profile.avatar_url
+      : comment.user_id === session?.user?.id
+        ? sessionUserMeta.avatar_url || sessionUserMeta.picture || null
+        : null;
+  const fallbackAvatarSource = typeof avatarUrl === "string" && avatarUrl.trim() ? avatarUrl : profileFallbackName;
+  const authorName = String(profileFallbackName || "Usuario");
   const profileColor = profile?.profile_color ?? getProfileColor(authorName);
   const isAnimating = Boolean(animatedLikes[comment.id]);
-  const generatedInitials = fallbackAvatarSource
-    .split(" ")
+  const generatedInitials = String(fallbackAvatarSource ?? "Usuario")
+    .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("") || "U";
 
-  const visibleChildren = children.slice(0, visibleRepliesCounts?.[comment.id] ?? Math.min(children.length, 8));
-  const hasMoreReplies = children.length > visibleChildren.length;
+  const safeChildren = Array.isArray(children) ? children : [];
+  const visibleChildren = safeChildren.slice(0, visibleRepliesCounts?.[comment.id] ?? Math.min(safeChildren.length, 8));
+  const hasMoreReplies = safeChildren.length > visibleChildren.length;
 
   return (
     <div
@@ -1409,7 +1446,7 @@ function CommentThread({
         </button>
       </div>
 
-      {children.length > 0 && (
+      {safeChildren.length > 0 && (
         <button
           type="button"
           className="replies-toggle"
@@ -1418,7 +1455,7 @@ function CommentThread({
           <span className="inline-block" style={{ transform: isRepliesExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }}>
             ▾
           </span>
-          {isRepliesExpanded ? `Ocultar ${children.length} ${children.length === 1 ? "respuesta" : "respuestas"}` : `Ver ${children.length} ${children.length === 1 ? "respuesta" : "respuestas"}`}
+          {isRepliesExpanded ? `Ocultar ${safeChildren.length} ${safeChildren.length === 1 ? "respuesta" : "respuestas"}` : `Ver ${safeChildren.length} ${safeChildren.length === 1 ? "respuesta" : "respuestas"}`}
         </button>
       )}
 
@@ -1444,7 +1481,7 @@ function CommentThread({
         </div>
       )}
 
-      {children.length > 0 && isRepliesExpanded && (
+      {safeChildren.length > 0 && isRepliesExpanded && (
         <div className={`reply-wrapper ${closingReplies?.[comment.id] ? "is-closing" : ""}`}>
           {visibleChildren.map((child) => (
             <CommentThread
