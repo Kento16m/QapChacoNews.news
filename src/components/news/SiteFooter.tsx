@@ -41,7 +41,7 @@ export function SiteFooter() {
             </div>
           </div>
 
-          <div className="grid gap-10 md:grid-cols-2">
+          <div className="grid gap-10 md:grid-cols-3">
             <div>
               <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-navy-muted/80">
                 Secciones
@@ -78,6 +78,24 @@ export function SiteFooter() {
                     </a>
                   </li>
                 ))}
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-navy-muted/80">
+                Contacto
+              </h3>
+              <ul className="mt-5 space-y-3">
+                <li>
+                  <a href="tel:+595972434625" className="text-sm text-slate-100 transition hover:text-primary">
+                    +595 972434625
+                  </a>
+                </li>
+                <li>
+                  <a href="mailto:contacto@qapchaconews.com" className="text-sm text-slate-100 transition hover:text-primary">
+                    contacto@qapchaconews.com
+                  </a>
+                </li>
               </ul>
             </div>
           </div>

@@ -180,6 +180,17 @@ export function CommentsSection({ articleId }: { articleId: string }) {
   const [visibleReplyCounts, setVisibleReplyCounts] = useState<Record<number, number>>({});
   const [sortMode, setSortMode] = useState<"popular" | "newest">("popular");
 
+  const currentUser = session?.user ?? null;
+  const currentUserId = currentUser?.id ?? null;
+  const currentUserMeta = currentUser?.user_metadata ?? {};
+  const currentUserDisplayName =
+    currentUserMeta?.full_name ||
+    currentUserMeta?.name ||
+    currentUser?.email?.split("@")[0] ||
+    "Usuario";
+  const currentUserAvatar = currentUserMeta?.avatar_url || currentUserMeta?.picture || null;
+  const isAuthenticated = Boolean(currentUserId && session?.access_token);
+
   useEffect(() => {
     if (!supabase) {
       setLoading(false);
@@ -362,8 +373,8 @@ export function CommentsSection({ articleId }: { articleId: string }) {
 
   const sortComments = (list: CommentRecord[]) =>
     [...list].sort((a, b) => {
-      const aIsOwner = session?.user?.id === a.user_id ? 1 : 0;
-      const bIsOwner = session?.user?.id === b.user_id ? 1 : 0;
+      const aIsOwner = currentUserId === a.user_id ? 1 : 0;
+      const bIsOwner = currentUserId === b.user_id ? 1 : 0;
 
       if (aIsOwner !== bIsOwner) return bIsOwner - aIsOwner;
 

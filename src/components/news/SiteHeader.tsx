@@ -107,10 +107,10 @@ function YouTubeIcon() {
 }
 
 export const socials = [
-  { icon: FacebookIcon, label: "Facebook", href: "https://facebook.com", color: "bg-[#1877F2]" },
-  { icon: XIcon, label: "X", href: "https://x.com", color: "bg-[#0F172A]" },
-  { icon: InstagramIcon, label: "Instagram", href: "https://instagram.com", color: "bg-gradient-to-br from-[#F9CE34] via-[#EE2A7B] to-[#6228D7]" },
-  { icon: YouTubeIcon, label: "YouTube", href: "https://youtube.com", color: "bg-[#FF0000]" },
+  { icon: FacebookIcon, label: "Facebook", href: "https://www.facebook.com/qapchaconews", color: "bg-[#1877F2]" },
+  { icon: XIcon, label: "X", href: "https://x.com/qapchaconews", color: "bg-[#0F172A]" },
+  { icon: InstagramIcon, label: "Instagram", href: "https://www.instagram.com/qapchaco/", color: "bg-gradient-to-br from-[#F9CE34] via-[#EE2A7B] to-[#6228D7]" },
+  { icon: YouTubeIcon, label: "YouTube", href: "https://www.youtube.com/@QAPChacoNews-26", color: "bg-[#FF0000]" },
 ];
 
 function useToday() {
@@ -820,7 +820,37 @@ export function SiteHeader() {
   const today = useToday();
   const { data: cats } = useCategories();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
+
+  const handleMoreCategorySelect = (category: { slug: string; name: string }) => {
+    trackCategoryView(category.name, "header_nav_more");
+    setMoreMenuOpen(false);
+    navigate({ to: "/categoria/$slug", params: { slug: category.slug } });
+  };
+
+  const primaryCategories = cats?.slice(0, 8) ?? [];
+  const secondaryCategories = cats && cats.length > 8 ? cats.slice(8) : [];
+
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [moreMenuOpen]);
 
   const goHome = () => {
     setMobileMenuOpen(false);
@@ -839,6 +869,53 @@ export function SiteHeader() {
   return (
     <>
       <SearchModal />
+      {moreMenuOpen && (
+        <div
+          ref={moreMenuRef}
+          className="fixed inset-0 z-[9999] flex min-h-screen items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setMoreMenuOpen(false);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-lg rounded-[30px] border border-border bg-card p-4 shadow-2xl sm:p-5"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3 px-1">
+              <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+                Categorías
+              </span>
+              <button
+                type="button"
+                aria-label="Cerrar categorías extra"
+                onClick={() => setMoreMenuOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {secondaryCategories.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => handleMoreCategorySelect(c)}
+                    className="rounded-2xl border border-border bg-secondary/40 px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="hidden bg-navy text-navy-foreground md:flex">
         <div className="mx-auto flex h-auto min-h-10 max-w-7xl flex-wrap items-center gap-3 px-4 py-2 sm:px-6">
           <span className="shrink-0 text-[11px] text-navy-muted sm:text-xs">{today}</span>
@@ -961,16 +1038,17 @@ export function SiteHeader() {
 
         <nav
           aria-label="Categorías"
-          className="mx-auto hidden max-w-7xl items-center gap-1 overflow-x-auto px-4 pb-2 sm:px-6 lg:flex"
+          className="no-scrollbar relative mx-auto hidden max-w-7xl items-center gap-1 overflow-x-auto overflow-y-visible px-4 pb-2 sm:px-6 lg:flex"
         >
           <button
             type="button"
             onClick={goHome}
-            className="rounded-full px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground data-[status=active]:bg-primary data-[status=active]:text-primary-foreground"
+            className="whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground data-[status=active]:bg-primary data-[status=active]:text-primary-foreground"
           >
             Inicio
           </button>
-          {cats?.map((c) => (
+
+          {primaryCategories.map((c) => (
             <Link
               key={c.id}
               to="/categoria/$slug"
@@ -981,6 +1059,20 @@ export function SiteHeader() {
               {c.name}
             </Link>
           ))}
+
+          {secondaryCategories.length > 0 && (
+            <div ref={moreMenuRef} className="relative shrink-0">
+              <button
+                type="button"
+                aria-expanded={moreMenuOpen}
+                onClick={() => setMoreMenuOpen((prev) => !prev)}
+                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold text-muted-foreground transition hover:text-foreground"
+              >
+                <span>Más</span>
+                <span className={cn("transition-transform duration-200", moreMenuOpen && "rotate-180")}>▾</span>
+              </button>
+            </div>
+          )}
         </nav>
       </header>
     </>

@@ -201,6 +201,18 @@
     & li + li { margin-top: 0.35em; }
   }
 }
+
+@layer utilities {
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @utility animate-ticker {
   animation: ticker 40s linear infinite;
   &:hover {
