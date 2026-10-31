@@ -959,20 +959,20 @@ export function CommentsSection({ articleId }: { articleId: string }) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <section className="mt-12 rounded-[32px] border border-[#ececf5] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.04)] sm:p-6">
-        <div className="mb-5 flex items-center justify-between gap-3">
+      <section className="mt-6 rounded-[28px] border border-[#ececf5] bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.04)] sm:mt-12 sm:p-6">
+        <div className="mb-5 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-[#5b4de6]" />
-            <h3 className="text-[2rem] font-black tracking-[-0.04em] text-slate-900">Comentarios</h3>
+            <h3 className="text-[1.55rem] font-black tracking-[-0.04em] text-slate-900 sm:text-[2rem]">Comentarios</h3>
           </div>
 
-          <div className="flex items-center gap-1 rounded-full border border-[#e8e5f7] bg-[#f7f7fb] p-1">
+          <div className="flex w-full items-center gap-1 rounded-full border border-[#e8e5f7] bg-[#f7f7fb] p-1 sm:w-auto">
             {(["popular", "newest"] as const).map((option) => (
               <button
                 key={option}
                 type="button"
                 onClick={() => setSortMode(option)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                className={`flex-1 rounded-full px-3 py-2 text-xs font-medium transition-all sm:flex-none sm:px-4 sm:text-sm ${
                   sortMode === option
                     ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200"
                     : "text-slate-500 hover:text-slate-800"
@@ -993,15 +993,15 @@ export function CommentsSection({ articleId }: { articleId: string }) {
           </div>
         ) : (
           !replyTo && (
-            <div className="mb-6 flex items-center gap-3 rounded-[24px] border border-[#eceaf8] bg-[#f7f7fb] p-3 shadow-[inset_0_0_0_1px_rgba(91,77,230,0.03)]">
+            <div className="mb-6 flex flex-col gap-3 rounded-[24px] border border-[#eceaf8] bg-[#f7f7fb] p-3 shadow-[inset_0_0_0_1px_rgba(91,77,230,0.03)] sm:flex-row sm:items-center">
               {session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture ? (
                 <img
                   src={session.user.user_metadata.avatar_url || session.user.user_metadata.picture}
                   alt={session.user.user_metadata.full_name || session.user.email || "Usuario"}
-                  className="h-11 w-11 rounded-full object-cover ring-2 ring-white"
+                  className="h-10 w-10 rounded-full object-cover ring-2 ring-white sm:h-11 sm:w-11"
                 />
               ) : (
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#5b4de6] text-sm font-bold text-white">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#5b4de6] text-xs font-bold text-white sm:h-11 sm:w-11 sm:text-sm">
                   {(session.user.user_metadata.full_name || session.user.email || "U")
                     .split(" ")
                     .filter(Boolean)
@@ -1024,7 +1024,7 @@ export function CommentsSection({ articleId }: { articleId: string }) {
                 type="button"
                 disabled={isSubmitting || !draft.trim()}
                 onClick={submitComment}
-                className="h-12 w-12 shrink-0 rounded-2xl bg-[#5b4de6] p-0 text-white shadow-[0_12px_30px_rgba(91,77,230,0.38)] transition-all hover:bg-[#4d40d8] disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-12 w-full rounded-2xl bg-[#5b4de6] p-0 text-white shadow-[0_12px_30px_rgba(91,77,230,0.38)] transition-all hover:bg-[#4d40d8] disabled:cursor-not-allowed disabled:opacity-60 sm:w-12 sm:min-w-0"
               >
                 <Send className="h-4 w-4" />
               </Button>
@@ -1213,7 +1213,7 @@ function CommentThread({
 
   return (
     <div
-      className={`relative rounded-[24px] border bg-white p-4 transition-all duration-300 ${
+      className={`relative rounded-[24px] border bg-white p-3 transition-all duration-300 sm:p-4 ${
         highlighted ? "border-[#5b4de6]/30 shadow-[0_0_0_2px_rgba(91,77,230,0.12)] animate-[comment-pop_0.7s_ease-out]" : "border-[#eef0f8]"
       } ${isRemoving ? "comment-card-removing" : ""}`}
       style={{ marginLeft: depth > 0 ? `${depth * 18}px` : 0 }}
@@ -1221,10 +1221,10 @@ function CommentThread({
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           {avatarUrl ? (
-            <img src={avatarUrl} alt={authorName} className="h-11 w-11 rounded-full object-cover ring-2 ring-[#f0f1f8]" />
+            <img src={avatarUrl} alt={authorName} className="h-10 w-10 rounded-full object-cover ring-2 ring-[#f0f1f8] sm:h-11 sm:w-11" />
           ) : (
             <div
-              className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white ring-2 ring-[#f0f1f8]"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-white ring-2 ring-[#f0f1f8] sm:h-11 sm:w-11 sm:text-sm"
               style={{ backgroundColor: profileColor }}
             >
               {initials}
@@ -1249,9 +1249,9 @@ function CommentThread({
         )}
       </div>
 
-      <div className="mt-3 whitespace-pre-wrap text-[15px] leading-7 text-slate-700" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(safeBody) }} />
+      <div className="mt-3 whitespace-pre-wrap text-[15px] leading-6 text-slate-700 sm:leading-7" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(safeBody) }} />
 
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
         <button
           type="button"
           onClick={() => onReply(comment.id, authorName)}
@@ -1293,11 +1293,11 @@ function CommentThread({
               className="min-h-[90px] resize-none border-0 bg-white text-sm placeholder:text-slate-400 focus-visible:ring-0"
             />
 
-            <div className="mt-3 flex justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={onCancelReply} className="rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={onCancelReply} className="w-full rounded-full border-slate-200 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto">
                 Cancelar
               </Button>
-              <Button type="button" size="sm" disabled={isSubmitting || !draft.trim()} onClick={onSubmitReply} className="rounded-full bg-[#5b4de6] text-white hover:bg-[#4d40d8]">
+              <Button type="button" size="sm" disabled={isSubmitting || !draft.trim()} onClick={onSubmitReply} className="w-full rounded-full bg-[#5b4de6] text-white hover:bg-[#4d40d8] sm:w-auto">
                 <Send className="h-4 w-4" /> Responder
               </Button>
             </div>
