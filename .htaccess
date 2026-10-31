@@ -1,6 +1,14 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    # Si la solicitud no es para la carpeta dist, redirige internamente a dist
-    RewriteCond %{REQUEST_URI} !^/dist/
-    RewriteRule ^(.*)$ dist/$1 [L]
+
+    # Permite rutas SPA en Hostinger sin devolver la 404 genérica del servidor.
+    # Si la URL no apunta a un archivo ni a una carpeta real, se sirve la app principal.
+    RewriteCond %{REQUEST_URI} !^/dist/ [NC]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.html [L,QSA]
+
+    # Si la ruta no existe, que la app maneje el 404 personalizado en lugar de la pantalla de Hostinger.
+    ErrorDocument 404 /index.html
+    ErrorDocument 403 /index.html
 </IfModule>
