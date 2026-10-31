@@ -256,9 +256,33 @@ function parseMaxicambiosBrowserHtml(html: string): ExchangeRateRecord {
   return nextRates;
 }
 
+function parseMaxicambiosProxyText(text: string): ExchangeRateRecord {
+  const nextRates: ExchangeRateRecord = {};
+  const codes = ["USD", "EUR", "BRL", "ARS", "UYU", "JPY", "GBP", "CLP", "CHF", "CAD", "AUD", "CNY"];
+
+  for (const code of codes) {
+    const pattern = new RegExp(
+      `flags\\/${code}\\.png\\)\\s*.*?Compra\\s*(\\d+(?:[.,]\\d+)?)\\s*.*?Venta\\s*(\\d+(?:[.,]\\d+)?)`,
+      "is",
+    );
+
+    const match = text.match(pattern);
+    if (!match) continue;
+
+    const buy = normalizeNumber(match[1]);
+    const sell = normalizeNumber(match[2]);
+
+    if (buy === null || sell === null) continue;
+
+    nextRates[code] = { buy, sell };
+  }
+
+  return nextRates;
+}
+
 async function fetchMaxicambiosViaProxy(): Promise<ExchangeRateRecord> {
-  const response = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(MAXICAMBIOS_URL), {
-    headers: { Accept: "text/html,application/xhtml+xml" },
+  const response = await fetch("https://r.jina.ai/http://https://www.maxicambios.com.py", {
+    headers: { Accept: "text/plain,text/html,application/xhtml+xml" },
     cache: "no-store",
   });
 
@@ -266,8 +290,8 @@ async function fetchMaxicambiosViaProxy(): Promise<ExchangeRateRecord> {
     throw new Error("No se pudo acceder a la cotización de Maxicambios desde el navegador.");
   }
 
-  const html = await response.text();
-  const parsed = parseMaxicambiosBrowserHtml(html);
+  const text = await response.text();
+  const parsed = parseMaxicambiosProxyText(text);
 
   if (Object.keys(parsed).length === 0) {
     throw new Error("La cotización de Maxicambios no devolvió resultados válidos.");
