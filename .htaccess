@@ -1,15 +1,7 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
-
-    # Deja pasar archivos reales y assets estáticos para que /cotizaciones.json y los assets
-    # no sean redirigidos a la SPA.
-    RewriteCond %{REQUEST_FILENAME} -f [OR]
-    RewriteCond %{REQUEST_FILENAME} -d
-    RewriteRule ^ - [L]
-
-    RewriteCond %{REQUEST_URI} ^/cotizaciones\.json$ [OR]
-    RewriteCond %{REQUEST_URI} \.(css|js|png|jpg|jpeg|gif|svg|webp|ico|json|map|woff|woff2|ttf|eot)$ [NC]
-    RewriteRule ^ - [L]
-
-    RewriteRule ^ dist/index.html [L]
+    # Si la solicitud no es para la carpeta dist, redirige internamente a dist
+    RewriteCond %{REQUEST_URI} !^/dist/
+    RewriteRule ^(.*)$ dist/index.html [L]
 </IfModule>
+

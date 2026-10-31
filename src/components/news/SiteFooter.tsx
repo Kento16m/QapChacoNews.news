@@ -8,11 +8,11 @@ export function SiteFooter() {
 
   const sectionLinks = cats?.slice(0, 8) ?? [];
   const legalLinks = [
-    { label: "Política de Cookies", href: "/cookies" },
-    { label: "Términos y Condiciones", href: "/terminos-y-condiciones" },
-    { label: "Política de Privacidad", href: "/politica-de-privacidad" },
-    { label: "Aviso Legal", href: "/aviso-legal" },
-    { label: "Quiénes Somos", href: "/quienes-somos" },
+    { label: "Política de Cookies", to: "/cookies" },
+    { label: "Términos y Condiciones", to: "/terminos-y-condiciones" },
+    { label: "Política de Privacidad", to: "/politica-de-privacidad" },
+    { label: "Aviso Legal", to: "/aviso-legal" },
+    { label: "Quiénes Somos", to: "/quienes-somos" },
   ];
 
   return (
@@ -68,14 +68,12 @@ export function SiteFooter() {
               <ul className="mt-5 space-y-3">
                 {legalLinks.map((item) => (
                   <li key={item.label}>
-                    <a
-                      href={item.href}
-                      target="_blank"
-                      rel="noreferrer"
+                    <Link
+                      to={item.to}
                       className="text-sm text-slate-100 transition hover:text-primary"
                     >
                       {item.label}
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>
