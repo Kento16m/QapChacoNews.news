@@ -9,13 +9,13 @@ function TermsPage() {
   return (
     <LegalPage
       title="Términos y Condiciones"
-      lastUpdated="19 de octubre de 2026"
+      lastUpdated="31 de octubre de 2026"
       intro={
         <>
           <p>
             Estos Términos y Condiciones regulan el uso del sitio web QAP ChacoNews, sus servicios, contenidos,
-            herramientas de acceso y cualquier característica asociada a la marca, propiedad editorial o actividades del
-            portal. El acceso y la utilización del sitio implican la aceptación plena y sin reservas de estas normas.
+            herramientas de acceso y cualquier característica asociada al medio digital operado por Ímpetus E.A.S. El
+            acceso y la utilización del sitio implican la aceptación plena y sin reservas de estas normas.
           </p>
         </>
       }
@@ -41,13 +41,14 @@ function TermsPage() {
             <>
               <p>
                 El portal tiene como finalidad informar, analizar y contextualizar temas de interés local, regional,
-                nacional e internacional, con especial foco en el Chaco paraguayo y el territorio del país.
+                nacional e internacional, con especial foco en el Chaco paraguayo y en la realidad del territorio del
+                país.
               </p>
               <p>
-                Los contenidos publicados pueden incluir noticias, reportajes, análisis, multimedia y piezas de opinión,
-                siempre bajo criterios editoriales y de verificación. QAP ChacoNews busca mantener rigor, contexto y un
-                enfoque claro, aunque el usuario debe entender que la información puede estar sujeta a cambios de última
-                hora o a una revisión posterior según nuevos datos.
+                Los contenidos publicados pueden incluir noticias, reportajes, análisis, multimedia, entrevistas,
+                contenidos de opinión y piezas de interés público, todos bajo criterios editoriales y de verificación.
+                QAP ChacoNews busca mantener rigor, contexto y enfoque claro, aunque el usuario debe entender que la
+                información puede estar sujeta a cambios de última hora o a una revisión posterior según nuevos datos.
               </p>
             </>
           ),
@@ -62,7 +63,7 @@ function TermsPage() {
                 <li>no intervenir en su funcionamiento ni vulnerar medidas de seguridad;</li>
                 <li>no recopilar contenidos con fines de extracción automatizada sin autorización;</li>
                 <li>respetar la propiedad intelectual y los derechos de terceros;</li>
-                <li>no usar el sitio para difundir contenido falso, abusivo, difamatorio o ilegal.</li>
+                <li>no usar el sitio para difundir contenido falso, abusivo, difamatorio, discriminatorio o ilegal.</li>
               </ul>
             </>
           ),
@@ -73,9 +74,9 @@ function TermsPage() {
             <>
               <p>
                 Todos los textos, imágenes, gráficos, logotipos, diseños, códigos y demás materiales del portal son
-                propiedad de QAP ChacoNews o de terceros con licencia o autorización expresa. Queda prohibida la
-                reproducción, distribución, difusión, copia o reutilización no autorizada salvo en los casos permitidos
-                por la normativa aplicable y por la propia política editorial.
+                propiedad de QAP ChacoNews, de Ímpetus E.A.S. o de terceros con licencia o autorización expresa. Queda
+                prohibida la reproducción, distribución, difusión, copia o reutilización no autorizada salvo en los casos
+                permitidos por la normativa aplicable y por la propia política editorial.
               </p>
             </>
           ),
@@ -86,12 +87,13 @@ function TermsPage() {
             <>
               <p>
                 Cuando el usuario interactúa en secciones de comentarios, participación o comunidad, acepta que su texto
-                pueda ser publicado bajo las reglas del sitio y que QAP ChacoNews puede moderarlo, editarlo, eliminarlo
-                o limitarlo si considera que incumple normas de decencia, legalidad, seguridad o buen uso editorial.
+                pueda ser publicado bajo las reglas del sitio y que QAP ChacoNews puede moderarlo, editarlo,
+                eliminarlo o limitarlo si considera que incumple normas de decencia, legalidad, seguridad o buen uso
+                editorial.
               </p>
               <p>
-                QAP ChacoNews no se hace responsable del contenido generado por terceros, salvo cuando así lo exija la
-                normativa vigente o cuando la obligación de moderación y retirada sea aplicable.
+                QAP ChacoNews no queda obligado a publicar todo contenido remitido por terceros y puede retirar, ocultar
+                o ajustar materiales si estima que se vulneran criterios de calidad, seguridad o normativa aplicable.
               </p>
             </>
           ),
@@ -126,10 +128,10 @@ function TermsPage() {
           content: (
             <>
               <p>
-                En la medida máxima permitida por la ley, QAP ChacoNews no será responsable por daños directos,
-                indirectos, consecuentes o incidentales derivados del uso del sitio, incluyendo pérdida de información,
-                perjuicios económicos, interrupciones de servicio, errores de contenido o decisiones tomadas por usuarios
-                basadas en información publicada.
+                En la medida máxima permitida por la ley, QAP ChacoNews y Ímpetus E.A.S. no serán responsables por daños
+                directos, indirectos, consecuentes o incidentales derivados del uso del sitio, incluyendo pérdida de
+                información, perjuicios económicos, interrupciones de servicio, errores de contenido o decisiones tomadas
+                por usuarios basadas en información publicada.
               </p>
             </>
           ),
@@ -142,7 +144,7 @@ function TermsPage() {
                 Estos términos se rigen por la legislación de la República del Paraguay, con especial atención a la
                 normativa aplicable a medios digitales, propiedad intelectual y servicios de la información. Cualquier
                 controversia que se derive de su interpretación o aplicación será resuelta en los tribunales competentes
-                del sistema jurídico paraguayo, salvo que la normativa vigente disponga otra cosa.
+                de la ciudad de Asunción, salvo que la normativa vigente disponga otra cosa.
               </p>
             </>
           ),

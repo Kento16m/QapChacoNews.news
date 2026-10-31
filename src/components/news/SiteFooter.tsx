@@ -85,13 +85,13 @@ export function SiteFooter() {
               </h3>
               <ul className="mt-5 space-y-3">
                 <li>
-                  <a href="tel:+595972434625" className="text-sm text-slate-100 transition hover:text-primary">
-                    +595 972434625
+                  <a href="tel:+595972438625" className="text-sm text-slate-100 transition hover:text-primary">
+                        +595 972 438 625
                   </a>
                 </li>
                 <li>
-                  <a href="mailto:contacto@qapchaconews.com" className="text-sm text-slate-100 transition hover:text-primary">
-                    contacto@qapchaconews.com
+                      <a href="mailto:direccion@impetuseas.com" className="text-sm text-slate-100 transition hover:text-primary">
+                        direccion@impetuseas.com
                   </a>
                 </li>
               </ul>
