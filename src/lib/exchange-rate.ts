@@ -4,7 +4,7 @@ import { load } from "cheerio";
 export const MAXICAMBIOS_URL = "https://www.maxicambios.com.py";
 export const MAXICAMBIOS_FALLBACK_URL = "https://maxicambios.com.py";
 export const MAXICAMBIOS_CACHE_MS = 20 * 60 * 1000;
-const PUBLIC_EXCHANGE_API_URL = "https://open.er-api.com/v6/latest/USD";
+const PUBLIC_EXCHANGE_API_URL = "https://open.er-api.com/v6/latest/PYG";
 const PUBLIC_BASE_CODES = new Set(["USD", "ARS", "BRL", "EUR", "UYU", "GBP", "JPY", "CAD", "AUD", "CHF", "CLP", "PYG"]);
 
 export type CurrencyPrice = {
@@ -104,13 +104,8 @@ function parseCurrencyCard(card: ReturnType<typeof load> extends never ? never :
   };
 }
 
-function convertUsdRatesToPyg(rawRates: Record<string, number>): ExchangeRateRecord {
+function convertPygBaseRatesToPyg(rawRates: Record<string, number>): ExchangeRateRecord {
   const normalized: ExchangeRateRecord = {};
-  const pygPerUsd = Number(rawRates.PYG);
-
-  if (!Number.isFinite(pygPerUsd) || pygPerUsd <= 0) {
-    return normalized;
-  }
 
   for (const [code, value] of Object.entries(rawRates)) {
     if (!PUBLIC_BASE_CODES.has(code)) continue;
@@ -118,7 +113,7 @@ function convertUsdRatesToPyg(rawRates: Record<string, number>): ExchangeRateRec
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue) || numericValue <= 0) continue;
 
-    const convertedValue = code === "PYG" ? 1 : pygPerUsd / numericValue;
+    const convertedValue = code === "PYG" ? 1 : 1 / numericValue;
     normalized[code] = {
       buy: convertedValue,
       sell: convertedValue,
@@ -140,7 +135,7 @@ export async function fetchPublicExchangeRates(): Promise<ExchangeRateRecord> {
 
   const payload = (await response.json()) as { rates?: Record<string, number> };
   const rawRates = payload.rates ?? {};
-  const normalized = convertUsdRatesToPyg(rawRates);
+  const normalized = convertPygBaseRatesToPyg(rawRates);
 
   if (Object.keys(normalized).length === 0) {
     throw new Error("La API pública no devolvió cotizaciones válidas.");
@@ -320,15 +315,15 @@ export async function fetchExchangeRates(): Promise<ExchangeRateRecord> {
     }
 
     try {
-      const proxyRates = await fetchMaxicambiosViaProxy();
-      if (Object.keys(proxyRates).length > 0) return proxyRates;
+      const publicRates = await fetchPublicExchangeRates();
+      if (Object.keys(publicRates).length > 0) return publicRates;
     } catch (error) {
       lastErrors.push(error);
     }
 
     try {
-      const publicRates = await fetchPublicExchangeRates();
-      if (Object.keys(publicRates).length > 0) return publicRates;
+      const proxyRates = await fetchMaxicambiosViaProxy();
+      if (Object.keys(proxyRates).length > 0) return proxyRates;
     } catch (error) {
       lastErrors.push(error);
     }
