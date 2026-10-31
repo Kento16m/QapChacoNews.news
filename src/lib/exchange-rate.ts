@@ -128,7 +128,7 @@ function convertUsdRatesToPyg(rawRates: Record<string, number>): ExchangeRateRec
   return normalized;
 }
 
-async function fetchPublicExchangeRates(): Promise<ExchangeRateRecord> {
+export async function fetchPublicExchangeRates(): Promise<ExchangeRateRecord> {
   const response = await fetch(PUBLIC_EXCHANGE_API_URL, {
     headers: { Accept: "application/json" },
     cache: "no-store",
@@ -222,25 +222,53 @@ export async function fetchMaxicambiosRates(): Promise<ExchangeRateRecord> {
 }
 
 export async function fetchExchangeRates(): Promise<ExchangeRateRecord> {
-  if (typeof window !== "undefined") {
-    const response = await fetch("/api/cotizaciones", {
-      headers: { Accept: "application/json" },
-    });
+  const lastErrors: unknown[] = [];
 
-    if (!response.ok) {
-      try {
-        return await fetchPublicExchangeRates();
-      } catch {
+  if (typeof window !== "undefined") {
+    try {
+      const publicRates = await fetchPublicExchangeRates();
+      if (Object.keys(publicRates).length > 0) return publicRates;
+    } catch (error) {
+      lastErrors.push(error);
+    }
+
+    try {
+      const response = await fetch("/api/cotizaciones", {
+        headers: { Accept: "application/json" },
+      });
+
+      if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(payload?.error ?? "No se pudo cargar la cotización.");
       }
-    }
 
-    const payload = (await response.json()) as { rates?: ExchangeRateRecord };
-    return payload.rates ?? {};
+      const payload = (await response.json()) as { rates?: ExchangeRateRecord };
+      if (payload.rates && Object.keys(payload.rates).length > 0) {
+        return payload.rates;
+      }
+
+      throw new Error("La API de cotizaciones no devolvió resultados válidos.");
+    } catch (error) {
+      lastErrors.push(error);
+    }
   }
 
-  return fetchMaxicambiosRates();
+  try {
+    const maxicambiosRates = await fetchMaxicambiosRates();
+    if (Object.keys(maxicambiosRates).length > 0) return maxicambiosRates;
+  } catch (error) {
+    lastErrors.push(error);
+  }
+
+  try {
+    const publicRates = await fetchPublicExchangeRates();
+    if (Object.keys(publicRates).length > 0) return publicRates;
+  } catch (error) {
+    lastErrors.push(error);
+  }
+
+  const lastError = lastErrors.at(-1);
+  throw new Error(lastError instanceof Error ? lastError.message : "No se pudo cargar la cotización.");
 }
 
 export const CURRENCY_PREVIEW: CurrencyListItem[] = [

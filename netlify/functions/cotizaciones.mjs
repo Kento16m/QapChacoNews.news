@@ -88,6 +88,43 @@ const parseCurrencyCard = (card) => {
   };
 };
 
+async function fetchPublicExchangeRates() {
+  const response = await fetch("https://open.er-api.com/v6/latest/USD", {
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error("La API pública de cotizaciones no respondió correctamente.");
+  }
+
+  const payload = await response.json();
+  const rawRates = payload.rates ?? {};
+  const normalized = {};
+  const pygPerUsd = Number(rawRates.PYG);
+
+  if (!Number.isFinite(pygPerUsd) || pygPerUsd <= 0) {
+    throw new Error("La API pública no devolvió cotizaciones válidas.");
+  }
+
+  for (const [code, value] of Object.entries(rawRates)) {
+    if (!["USD", "ARS", "BRL", "EUR", "UYU", "GBP", "JPY", "CAD", "AUD", "CHF", "CLP", "PYG"].includes(code)) continue;
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) continue;
+
+    normalized[code] = {
+      buy: code === "PYG" ? 1 : pygPerUsd / numericValue,
+      sell: code === "PYG" ? 1 : pygPerUsd / numericValue,
+    };
+  }
+
+  if (Object.keys(normalized).length === 0) {
+    throw new Error("La API pública no devolvió cotizaciones válidas.");
+  }
+
+  return normalized;
+}
+
 async function fetchMaxicambiosRates() {
   const now = Date.now();
 
@@ -153,7 +190,13 @@ export default async function handler(request) {
   }
 
   try {
-    const rates = await fetchMaxicambiosRates();
+    let rates;
+    try {
+      rates = await fetchMaxicambiosRates();
+    } catch (error) {
+      rates = await fetchPublicExchangeRates();
+    }
+
     return Response.json(
       {
         rates,
