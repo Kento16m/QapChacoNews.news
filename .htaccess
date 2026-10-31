@@ -1,15 +1,15 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /
 
-    # Deja pasar archivos y carpetas reales (assets, imágenes, etc.)
+    # Deja pasar archivos reales y assets estáticos para que /cotizaciones.json y los assets
+    # no sean redirigidos a la SPA.
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # SPA fallback: si la ruta no existe, servimos index.html para que la app React maneje
-    # el 404 personalizado dentro de la ruta /noticia/... o cualquier otra ruta interna.
-    RewriteRule ^ index.html [L]
-</IfModule>
+    RewriteCond %{REQUEST_URI} ^/cotizaciones\.json$ [OR]
+    RewriteCond %{REQUEST_URI} \.(css|js|png|jpg|jpeg|gif|svg|webp|ico|json|map|woff|woff2|ttf|eot)$ [NC]
+    RewriteRule ^ - [L]
 
-DirectoryIndex index.html
+    RewriteRule ^ dist/index.html [L]
+</IfModule>
