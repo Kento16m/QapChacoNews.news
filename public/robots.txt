@@ -1,14 +1,42 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /api/
+Disallow: /private/
+Disallow: /_/
+
+# Sitemap principal del sitio
+Sitemap: https://www.qapchaconews.com/sitemap.xml
+
+# Host canonical recomendado para indexación
+Host: www.qapchaconews.com
+
+# Bots relevantes
 User-agent: Googlebot
 Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /api/
+Disallow: /private/
 
 User-agent: Bingbot
 Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /api/
+Disallow: /private/
 
-User-agent: Twitterbot
+User-agent: Adsbot-Google
 Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /api/
+Disallow: /private/
 
-User-agent: facebookexternalhit
+User-agent: Google-Extended
 Allow: /
-
-User-agent: *
-Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /api/
+Disallow: /private/
