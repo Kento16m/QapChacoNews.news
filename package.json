@@ -4,7 +4,10 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
+    "generate:exchange-rates": "node scripts/generate-exchange-rates.mjs",
+    "predev": "npm run generate:exchange-rates",
     "dev": "vite dev",
+    "prebuild": "npm run generate:exchange-rates",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",

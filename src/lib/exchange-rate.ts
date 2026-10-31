@@ -4,6 +4,7 @@ import { load } from "cheerio";
 export const MAXICAMBIOS_URL = "https://www.maxicambios.com.py";
 export const MAXICAMBIOS_FALLBACK_URL = "https://maxicambios.com.py";
 export const MAXICAMBIOS_CACHE_MS = 20 * 60 * 1000;
+const STATIC_EXCHANGE_URL = "/cotizaciones.json";
 const PUBLIC_EXCHANGE_API_URL = "https://open.er-api.com/v6/latest/USD";
 const PUBLIC_BASE_CODES = new Set(["USD", "ARS", "BRL", "EUR", "UYU", "GBP", "JPY", "CAD", "AUD", "CHF", "CLP", "PYG"]);
 
@@ -298,13 +299,33 @@ async function fetchMaxicambiosViaProxy(): Promise<ExchangeRateRecord> {
   return parsed;
 }
 
+async function fetchStaticExchangeRates(): Promise<ExchangeRateRecord | null> {
+  try {
+    const response = await fetch(STATIC_EXCHANGE_URL, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as { rates?: ExchangeRateRecord };
+    if (payload.rates && Object.keys(payload.rates).length > 0) {
+      return payload.rates;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 export async function fetchExchangeRates(): Promise<ExchangeRateRecord> {
   const lastErrors: unknown[] = [];
 
   if (typeof window !== "undefined") {
     try {
-      const publicRates = await fetchPublicExchangeRates();
-      if (Object.keys(publicRates).length > 0) return publicRates;
+      const staticRates = await fetchStaticExchangeRates();
+      if (staticRates && Object.keys(staticRates).length > 0) return staticRates;
     } catch (error) {
       lastErrors.push(error);
     }
@@ -323,25 +344,18 @@ export async function fetchExchangeRates(): Promise<ExchangeRateRecord> {
     } catch (error) {
       lastErrors.push(error);
     }
-
-    try {
-      const proxyRates = await fetchMaxicambiosViaProxy();
-      if (Object.keys(proxyRates).length > 0) return proxyRates;
-    } catch (error) {
-      lastErrors.push(error);
-    }
-  }
-
-  try {
-    const publicRates = await fetchPublicExchangeRates();
-    if (Object.keys(publicRates).length > 0) return publicRates;
-  } catch (error) {
-    lastErrors.push(error);
   }
 
   try {
     const maxicambiosRates = await fetchMaxicambiosRates();
     if (Object.keys(maxicambiosRates).length > 0) return maxicambiosRates;
+  } catch (error) {
+    lastErrors.push(error);
+  }
+
+  try {
+    const publicRates = await fetchPublicExchangeRates();
+    if (Object.keys(publicRates).length > 0) return publicRates;
   } catch (error) {
     lastErrors.push(error);
   }
