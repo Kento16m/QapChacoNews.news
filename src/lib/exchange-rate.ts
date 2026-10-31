@@ -221,33 +221,90 @@ export async function fetchMaxicambiosRates(): Promise<ExchangeRateRecord> {
   }
 }
 
+function parseMaxicambiosBrowserHtml(html: string): ExchangeRateRecord {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const cards = Array.from(doc.querySelectorAll(".cotizDivSmall"));
+  const nextRates: ExchangeRateRecord = {};
+
+  for (const card of cards) {
+    const flagElement = card.querySelector("img[src*='flags/']");
+    const flagSrc = flagElement?.getAttribute("src") ?? "";
+    const flagMatch = flagSrc.match(/(?:\/|\\)(USD|EUR|BRL|ARS|UYU|JPY|GBP|CLP|CHF|CAD|AUD|CNY)\.(?:png|jpg|jpeg|svg)/i);
+    const codeFromFlag = flagMatch ? flagMatch[1].toUpperCase() : null;
+
+    const labelText = Array.from(card.querySelectorAll("p")).at(-1)?.textContent?.trim() ?? "";
+    const detected = Object.entries(CODE_BY_LABEL).find(([key]) =>
+      labelText.toLowerCase().includes(key) || (codeFromFlag && key === "peso" && codeFromFlag === "ARS"),
+    );
+
+    const resolvedCode = codeFromFlag ?? (detected ? detected[1] : null);
+    if (!resolvedCode) continue;
+
+    const text = card.textContent ?? "";
+    const numericValues = Array.from(text.matchAll(/\d+(?:[.,]\d+)?/g))
+      .map((match) => normalizeNumber(match[0]))
+      .filter((value): value is number => value !== null);
+
+    if (numericValues.length < 2) continue;
+
+    nextRates[resolvedCode] = {
+      buy: numericValues[0],
+      sell: numericValues[1],
+    };
+  }
+
+  return nextRates;
+}
+
+async function fetchMaxicambiosViaProxy(): Promise<ExchangeRateRecord> {
+  const response = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(MAXICAMBIOS_URL), {
+    headers: { Accept: "text/html,application/xhtml+xml" },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudo acceder a la cotización de Maxicambios desde el navegador.");
+  }
+
+  const html = await response.text();
+  const parsed = parseMaxicambiosBrowserHtml(html);
+
+  if (Object.keys(parsed).length === 0) {
+    throw new Error("La cotización de Maxicambios no devolvió resultados válidos.");
+  }
+
+  return parsed;
+}
+
 export async function fetchExchangeRates(): Promise<ExchangeRateRecord> {
   const lastErrors: unknown[] = [];
 
   if (typeof window !== "undefined") {
     try {
-      const publicRates = await fetchPublicExchangeRates();
-      if (Object.keys(publicRates).length > 0) return publicRates;
+      const response = await fetch("/api/cotizaciones", {
+        headers: { Accept: "application/json" },
+      });
+
+      if (response.ok) {
+        const payload = (await response.json()) as { rates?: ExchangeRateRecord };
+        if (payload.rates && Object.keys(payload.rates).length > 0) {
+          return payload.rates;
+        }
+      }
     } catch (error) {
       lastErrors.push(error);
     }
 
     try {
-      const response = await fetch("/api/cotizaciones", {
-        headers: { Accept: "application/json" },
-      });
+      const proxyRates = await fetchMaxicambiosViaProxy();
+      if (Object.keys(proxyRates).length > 0) return proxyRates;
+    } catch (error) {
+      lastErrors.push(error);
+    }
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? "No se pudo cargar la cotización.");
-      }
-
-      const payload = (await response.json()) as { rates?: ExchangeRateRecord };
-      if (payload.rates && Object.keys(payload.rates).length > 0) {
-        return payload.rates;
-      }
-
-      throw new Error("La API de cotizaciones no devolvió resultados válidos.");
+    try {
+      const publicRates = await fetchPublicExchangeRates();
+      if (Object.keys(publicRates).length > 0) return publicRates;
     } catch (error) {
       lastErrors.push(error);
     }
