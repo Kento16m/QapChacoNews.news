@@ -1,14 +1,15 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    RewriteBase /
 
-    # Permite rutas SPA en Hostinger sin devolver la 404 genérica del servidor.
-    # Si la URL no apunta a un archivo ni a una carpeta real, se sirve la app principal.
-    RewriteCond %{REQUEST_URI} !^/dist/ [NC]
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^ index.html [L,QSA]
+    # Deja pasar archivos y carpetas reales (assets, imágenes, etc.)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
 
-    # Si la ruta no existe, que la app maneje el 404 personalizado en lugar de la pantalla de Hostinger.
-    ErrorDocument 404 /index.html
-    ErrorDocument 403 /index.html
+    # SPA fallback: si la ruta no existe, servimos index.html para que la app React maneje
+    # el 404 personalizado dentro de la ruta /noticia/... o cualquier otra ruta interna.
+    RewriteRule ^ index.html [L]
 </IfModule>
+
+DirectoryIndex index.html
